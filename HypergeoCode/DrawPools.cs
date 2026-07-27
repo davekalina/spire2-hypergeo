@@ -1,4 +1,3 @@
-using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
@@ -20,11 +19,6 @@ namespace Hypergeo.HypergeoCode;
 /// </summary>
 internal sealed class DrawPools
 {
-    private static readonly FieldInfo? TurnNumberField = typeof(PlayerCombatState)
-        .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
-        .FirstOrDefault(field =>
-            field.FieldType == typeof(int) && field.Name.Contains("TurnNumber"));
-
     private readonly bool _handIsFlushed;
 
     private DrawPools(
@@ -32,13 +26,14 @@ internal sealed class DrawPools
         IReadOnlyList<CardModel> discard,
         IReadOnlyList<CardModel> hand,
         bool handIsFlushed,
-        int naturalDrawCount)
+        NextHandDraw nextDraw)
     {
         _handIsFlushed = handIsFlushed;
         Draw = draw;
         Discard = discard;
         Hand = hand;
-        NaturalDrawCount = naturalDrawCount;
+        NaturalDrawCount = nextDraw.Count;
+        DrawModifiers = nextDraw.Modifiers;
         Retained = hand.Where(IsRetained).ToList();
         Reshuffle = discard
             .Concat(hand.Where(card => !IsRetained(card)))
@@ -65,6 +60,9 @@ internal sealed class DrawPools
 
     /// <summary>Next-hand draw after modifiers, retain, and hand capacity.</summary>
     public int NaturalDrawCount { get; }
+
+    /// <summary>Names of the effects that moved the draw count off its base of 5.</summary>
+    public IReadOnlyList<string> DrawModifiers { get; }
 
     /// <summary>Total cards the next hand could reach, across both stages.</summary>
     public int ReachableCount => Draw.Count + Reshuffle.Count;
@@ -98,7 +96,8 @@ internal sealed class DrawPools
 
         var state = CombatManager.Instance.DebugOnlyGetState();
         if (state == null)
-            return new DrawPools(draw, discard, hand, handIsFlushed: true, 0);
+            return new DrawPools(
+                draw, discard, hand, handIsFlushed: true, new NextHandDraw(0, []));
 
         // ShouldFlush decides what happens at the end of the turn in progress, so it
         // is asked about the turn the player is on right now.
@@ -106,62 +105,8 @@ internal sealed class DrawPools
         var retained = handIsFlushed
             ? hand.Count(card => card.ShouldRetainThisTurn)
             : hand.Count;
-        var naturalDrawCount = OnNextTurn(combatState, () =>
-        {
-            if (!Hook.ShouldDraw(state, player, fromHandDraw: true, out _))
-                return 0;
-            var modified = Hook.ModifyHandDraw(
-                state, player, CombatManager.baseHandDrawCount, out _);
-            return Math.Min(
-                Math.Max(0, CardPile.MaxCardsInHand - retained),
-                Math.Max(0, (int)modified));
-        });
-        return new DrawPools(draw, discard, hand, handIsFlushed, naturalDrawCount);
-    }
-
-    /// <summary>
-    /// Evaluate a draw hook the way the game will evaluate it next turn.
-    ///
-    /// Draw modifiers are turn-sensitive — Ring of the Snake and Bag of Preparation
-    /// only add on turn 1, Pocketwatch pays out only from turn 2, Ring of the Drake
-    /// only inside a turn window — and the game runs these hooks *after* it has
-    /// incremented the turn number. Asking them as-is reports the hand the player
-    /// already has, not the one they are about to draw.
-    ///
-    /// Every ModifyHandDraw implementation is a pure read, so the turn number is
-    /// nudged forward across the call and restored in a finally. If the field ever
-    /// disappears the prediction falls back to the current turn rather than failing.
-    /// </summary>
-    private static int OnNextTurn(PlayerCombatState combatState, Func<int> evaluate)
-    {
-        if (TurnNumberField == null)
-        {
-            WarnOnceAboutMissingTurnNumber();
-            return evaluate();
-        }
-        var currentTurn = combatState.TurnNumber;
-        TurnNumberField.SetValue(combatState, currentTurn + 1);
-        try
-        {
-            return evaluate();
-        }
-        finally
-        {
-            TurnNumberField.SetValue(combatState, currentTurn);
-        }
-    }
-
-    private static bool _warnedAboutTurnNumber;
-
-    private static void WarnOnceAboutMissingTurnNumber()
-    {
-        if (_warnedAboutTurnNumber)
-            return;
-        _warnedAboutTurnNumber = true;
-        MainFile.Logger.Warn(
-            "PlayerCombatState turn number field not found. Draw counts will be " +
-            "predicted for the current turn, so first-turn draw bonuses will be " +
-            "reported for the next hand as well.");
+        var nextDraw = NextHandDraw.Resolve(state, player, retained);
+        return new DrawPools(draw, discard, hand, handIsFlushed, nextDraw);
     }
 
     public static DrawPools? TryResolveForLocalPlayer()

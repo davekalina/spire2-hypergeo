@@ -20,10 +20,10 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private const float CardPadding = 40f;
 
     private const string ReshuffleMarkerText =
-        "RESHUFFLE\nDiscard Pile + Cards in Hand\n→";
+        "Reshuffle\nDiscard Pile + Cards in Hand\n→";
 
     private const string RetainedMarkerText =
-        "RETAINED\nStays in Hand\nNot Reshuffled";
+        "Retained\nStays in Hand\nNot Reshuffled";
 
     private readonly NCardPileScreen _screen;
     private readonly Player _player;
@@ -47,11 +47,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly Button _targetDecrease;
     private readonly Button _targetIncrease;
     private readonly MegaLabel _targetCountLabel;
-    private readonly NativeShelf.ShelfRow _selectedRow;
     private readonly NativeShelf.ShelfRow _needRow;
     private readonly NativeShelf.ShelfRow _heldRow;
     private readonly NativeShelf.ShelfRow _chanceRow;
     private readonly MegaLabel _hintLabel;
+    private readonly MegaLabel _drawNote;
+    private readonly MegaLabel _queryNote;
 
     private DrawPools _pools;
     private bool _anyMode = true;
@@ -73,7 +74,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _refreshTimer = new Godot.Timer { WaitTime = 0.15, Autostart = true };
         _shelf = new NativeShelf();
 
-        var draw = _shelf.AddModule(_shelf.Top, "DRAW");
+        var draw = _shelf.AddModule(_shelf.Top, "Draw");
         var drawRow = NativeShelf.CreateControlRow();
         var drawDecreaseControl = _shelf.CreateButton("−", 48);
         var drawCountControl = _shelf.CreateButton(
@@ -91,8 +92,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
         drawRow.AddChild(drawIncreaseControl.Root);
         draw.Body.AddChild(drawRow);
         _shelf.AddCaption(draw.Body, "cards next hand");
+        _drawNote = _shelf.AddNote(draw.Body, string.Empty, 13);
 
-        var selection = _shelf.AddModule(_shelf.Top, "SELECTION");
+        var selection = _shelf.AddModule(_shelf.Top, "Selection");
         var modeRow = NativeShelf.CreateControlRow();
         var anyControl = _shelf.CreateButton(
             "ANY", 78, "Calculate the chance of drawing at least N selected cards.");
@@ -117,13 +119,14 @@ internal sealed class AllCardsPileScreenView : IDisposable
         selection.Body.AddChild(_targetRow);
         _hintLabel = _shelf.AddCaption(selection.Body, string.Empty);
 
-        var result = _shelf.AddModule(_shelf.Top, "DRAW CHANCE");
-        _selectedRow = _shelf.AddRow(result.Body, "Selected");
+        var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
+        _queryNote = _shelf.AddNote(result.Body, string.Empty);
         _needRow = _shelf.AddRow(result.Body, "Need");
         _heldRow = _shelf.AddRow(result.Body, "Retained");
         _chanceRow = _shelf.AddRow(result.Body, "Chance");
 
         var overlayToggle = _shelf.AddToggle(_shelf.Bottom, "Show Odds on Cards", false);
+        AddAboutRow();
 
         _anyButton.Pressed += () => SetAnyMode(true);
         _allButton.Pressed += () => SetAnyMode(false);
@@ -169,6 +172,37 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _shelf.Dispose();
         RestoreRunUiOrder();
     }
+
+    /// <summary>
+    /// The mod's own footer, in the corner the Card Library leaves for its settings.
+    /// </summary>
+    private void AddAboutRow()
+    {
+        var row = NativeShelf.CreateFullWidthRow(4);
+        var label = _shelf.CreateText($"{MainFile.ModName}\n{MainFile.Version}", 13);
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.HorizontalAlignment = HorizontalAlignment.Left;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        label.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        row.AddChild(label);
+
+        var help = _shelf.CreateButton("?", 36, HelpText, MainFile.ModName);
+        help.Root.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        row.AddChild(help.Root);
+        _shelf.Bottom.AddChild(row);
+    }
+
+    private static string HelpText =>
+        "Odds that next turn's hand contains the cards you pick.\n\n" +
+        "Click cards to select them. ANY needs at least the target number of them; " +
+        "ALL needs every one.\n\n" +
+        "The draw pile is drawn first. Your discard pile and hand return together " +
+        "on the reshuffle, so they share one section. Retained cards never leave " +
+        "your hand and cannot be drawn.\n\n" +
+        "The draw count is what next turn will deal, after relics, powers, retain, " +
+        "and hand size. Use − and + to ask about a different number; click the " +
+        "count to restore the real one.";
 
     /// <summary>
     /// Draw over the run's top bar and relic inventory, the way the Card Library owns
@@ -279,8 +313,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
                 ? $"of {selectedTotal} selected"
                 : $"all {selectedTotal} selected";
 
-        _selectedRow.Value.Text = selectedTotal.ToString();
-        _needRow.Value.Text = selectedTotal == 0 ? "—" : requiredHits.ToString();
+        _drawNote.Text = DescribeDrawCount();
+        _queryNote.Text = DescribeQuery(selectedTotal, requiredHits);
+        _needRow.Root.Visible = selectedTotal > 0;
+        _needRow.Value.Text = _anyMode
+            ? $"{requiredHits} of {selectedTotal}"
+            : $"all {selectedTotal}";
         _heldRow.Root.Visible = retainedSelected > 0;
         _heldRow.Value.Text = retainedSelected.ToString();
         _chanceRow.Value.Text = selectedTotal == 0
@@ -302,6 +340,48 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         RebuildOverlayText();
         RefreshPresentation();
+    }
+
+    /// <summary>
+    /// Name the effects behind a draw count that is not the base of five, so the number
+    /// can be checked rather than trusted. While the count is overridden by hand the
+    /// modifiers no longer describe it, so the real value is offered instead.
+    /// </summary>
+    private string DescribeDrawCount()
+    {
+        if (_chosenDrawCount != _pools.NaturalDrawCount)
+            return $"set by hand — next turn deals {_pools.NaturalDrawCount}";
+        return _pools.DrawModifiers.Count == 0
+            ? string.Empty
+            : string.Join(", ", _pools.DrawModifiers);
+    }
+
+    /// <summary>
+    /// State the question the percentage answers, naming the cards that were picked.
+    /// </summary>
+    private string DescribeQuery(int selectedTotal, int requiredHits)
+    {
+        if (selectedTotal == 0)
+            return "Select cards in the grid.";
+
+        const int maxNames = 3;
+        var names = _selectedCards
+            .OrderBy(card => card.Rarity)
+            .ThenBy(card => card.Title, StringComparer.CurrentCulture)
+            .Select(card => card.Title)
+            .Distinct()
+            .ToList();
+        var shown = names.Take(maxNames).ToList();
+        var joiner = _anyMode && requiredHits == 1 ? " or " : " and ";
+        var listed = shown.Count == 1
+            ? shown[0]
+            : string.Join(", ", shown.Take(shown.Count - 1)) + joiner + shown[^1];
+        if (names.Count > shown.Count)
+            listed += $" +{names.Count - shown.Count} more";
+
+        return _anyMode && requiredHits > 1
+            ? $"Chance to draw {requiredHits} of {listed}:"
+            : $"Chance to draw {listed}:";
     }
 
     /// <summary>

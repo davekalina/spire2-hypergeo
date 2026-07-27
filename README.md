@@ -29,12 +29,30 @@ Cards a retain effect keeps in hand are excluded from both stages and always
 read 0%. They are not reshuffled until they are played and leave the hand, so no
 upcoming draw can reach them.
 
-The draw count is predicted for the turn that is coming, not the one in
-progress. Draw modifiers are turn-sensitive — Ring of the Snake and Bag of
-Preparation only add on turn 1, Pocketwatch only pays out from turn 2, Ring of
-the Drake only inside a turn window — and the game runs those hooks after it
-increments the turn number. `DrawPools` therefore evaluates them one turn ahead,
-so Silent's opening hand of 7 correctly predicts 5 for turn 2.
+## Predicting the draw count
+
+The draw count is what the *next* turn will deal, not what this one did. The
+game's draw hooks answer for the turn they are asked in, and several effects roll
+per-turn bookkeeping forward at the turn boundary, so asking them mid-turn
+describes the hand already in hand. `NextHandDraw` advances that bookkeeping
+across the call and restores it immediately.
+
+| Effect | Why the mid-turn answer is wrong |
+| --- | --- |
+| Ring of the Snake, Bag of Preparation, Big Mushroom, Booming Conch | Only apply on turn 1, so they must be read at turn + 1 |
+| Ring of the Drake | Applies within a turn window |
+| Pocketwatch | Reads *last* turn's cards played; the roll happens in `BeforeSideTurnStart`, so this turn's count is what next turn will see. Playing past its threshold breaks it immediately |
+| Pollinous Core | `BeforeHandDraw` ticks its turn counter just before the draw reads it |
+| Draw Cards Next Turn | Gated on `AmountOnTurnStart`, which is still zero on the turn the power is applied |
+| Pendulum | Draws in `AfterPlayerTurnStart` instead of modifying the hand draw, so the hook never reports it |
+| Fiddle | Applies in the late `ModifyHandDrawLate` pass |
+
+Clarity, Demesne, Machine Learning, Tools of the Trade, Tyranny, Mind Rot,
+Pael's Blood, and Snecko Eye read their current amount and are not decayed until
+after the draw, so they need no adjustment.
+
+The shelf names whichever of these moved the count, so the number can be checked
+rather than trusted.
 
 `DrawPools` builds all of this from live combat state, and every screen resolves
 its odds through it, so the piles, the draw count, and the reshuffle model
@@ -47,30 +65,34 @@ screen: a Card Library shelf beside one continuous grid of every card the next
 hand could reach, in draw order. Like the Card Library, it draws over the run's
 top bar and relic inventory rather than under them.
 
-The grid runs the draw pile, then a card-sized **RESHUFFLE — Discard Pile +
+The grid runs the draw pile, then a card-sized **Reshuffle — Discard Pile +
 Cards in Hand →** marker, then the reshuffle pool itself. The discard pile and
 the hand share one section, sorted as a single run, because they are one
 population: they return to the draw pile together. Anything retain is holding
-back follows a final **RETAINED — Stays in Hand** marker, kept out of the
+back follows a final **Retained — Stays in Hand** marker, kept out of the
 reshuffle it will not take part in. Card clicks toggle exact physical copies,
 and hovering shows the same native Draw Chance tooltip the individual pile
 screens use.
 
 The shelf holds the whole query and its result:
 
-- **DRAW** — the **−**/**+** row sets how many cards the next hand draws.
-  Clicking the count restores the natural next-turn draw after modifiers,
-  retain, and hand-capacity constraints. That natural value is also restored
-  every time the screen opens.
-- **SELECTION** — **ANY** calculates the chance of drawing at least the chosen
+- **Draw** — the **−**/**+** row sets how many cards the next hand draws, and
+  the effects that moved it off the base of five are named underneath. Clicking
+  the count restores the real next-turn draw, which is also restored every time
+  the screen opens. While the count is set by hand the note says so and offers
+  the real value.
+- **Selection** — **ANY** calculates the chance of drawing at least the chosen
   number of selected cards; **ALL** the chance of drawing every one of them.
   The second **−**/**+** row sets the ANY target.
-- **DRAW CHANCE** — selected count, required hits, and the resulting
+- **Draw Chance** — states the question in words, naming the picked cards
+  ("Chance to draw Strike or Neutralize:"), then the required hits and the
   probability. A **Retained** row appears when a selection includes retained
   cards, which explains a lower-than-expected result.
 - **Show Odds on Cards** — prints each card's any-copy draw chance onto the
   cards themselves, using the same on-card readout as the Card Library's View
   Stats toggle.
+- The footer carries the mod name and version, with a **?** button whose hover
+  tip explains the screen.
 
 ## Build
 
@@ -115,5 +137,9 @@ v0.5.0 so the identity is settled before the first Workshop publish.
 
 v0.6.0 rebuilt the All Cards screen around the Card Library shelf and folded the
 hand into the reshuffle pool. Before that, cards in hand were absent from the
-screen and from the odds entirely, and the draw count was predicted for the turn
-in progress rather than the next one.
+screen and from the odds entirely.
+
+v0.7.0 corrected the draw-count prediction. Every effect listed under
+**Predicting the draw count** was previously read mid-turn, so Pocketwatch did
+not break when its threshold was passed, Pendulum and Draw Cards Next Turn were
+missed outright, and Pollinous Core was a turn behind.

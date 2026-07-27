@@ -212,6 +212,25 @@ internal sealed class NativeShelf : IDisposable
         return label;
     }
 
+    /// <summary>A wrapped note line, for text that will not fit one row.</summary>
+    public MegaLabel AddNote(VBoxContainer parent, string text, int fontSize = 15)
+    {
+        var label = CreateText(text, fontSize);
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        parent.AddChild(label);
+        return label;
+    }
+
+    /// <summary>A full-width row, unlike the centred rows of shelf controls.</summary>
+    public static HBoxContainer CreateFullWidthRow(int separation = 6)
+    {
+        var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        row.AddThemeConstantOverride("separation", separation);
+        return row;
+    }
+
     /// <summary>The Card Library's bottom-of-sidebar view toggle.</summary>
     public NLibraryStatTickbox AddToggle(VBoxContainer parent, string label, bool ticked)
     {
