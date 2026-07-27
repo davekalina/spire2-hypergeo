@@ -39,6 +39,7 @@ internal sealed class DrawPools
         Discard = discard;
         Hand = hand;
         NaturalDrawCount = naturalDrawCount;
+        Retained = hand.Where(IsRetained).ToList();
         Reshuffle = discard
             .Concat(hand.Where(card => !IsRetained(card)))
             .ToList();
@@ -55,6 +56,12 @@ internal sealed class DrawPools
 
     /// <summary>Everything the reshuffle returns to the draw pile.</summary>
     public IReadOnlyList<CardModel> Reshuffle { get; }
+
+    /// <summary>
+    /// Hand cards retain keeps out of the reshuffle. They only rejoin the deck once
+    /// they are played and leave the hand, so no upcoming draw can reach them.
+    /// </summary>
+    public IReadOnlyList<CardModel> Retained { get; }
 
     /// <summary>Next-hand draw after modifiers, retain, and hand capacity.</summary>
     public int NaturalDrawCount { get; }

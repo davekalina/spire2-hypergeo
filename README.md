@@ -25,8 +25,9 @@ Odds are computed in two stages, in the order the game draws:
    discard pile *plus* every card in hand, because the end of the turn sends the
    hand to the discard before the next hand is dealt.
 
-Cards a retain effect keeps in hand never leave it, so they are excluded from
-both stages and always read 0%.
+Cards a retain effect keeps in hand are excluded from both stages and always
+read 0%. They are not reshuffled until they are played and leave the hand, so no
+upcoming draw can reach them.
 
 The draw count is predicted for the turn that is coming, not the one in
 progress. Draw modifiers are turn-sensitive — Ring of the Snake and Bag of
@@ -48,9 +49,12 @@ top bar and relic inventory rather than under them.
 
 The grid runs the draw pile, then a card-sized **RESHUFFLE — Discard Pile +
 Cards in Hand →** marker, then the reshuffle pool itself. The discard pile and
-the hand share one section because they are one population: they return to the
-draw pile together. Card clicks toggle exact physical copies, and hovering shows
-the same native Draw Chance tooltip the individual pile screens use.
+the hand share one section, sorted as a single run, because they are one
+population: they return to the draw pile together. Anything retain is holding
+back follows a final **RETAINED — Stays in Hand** marker, kept out of the
+reshuffle it will not take part in. Card clicks toggle exact physical copies,
+and hovering shows the same native Draw Chance tooltip the individual pile
+screens use.
 
 The shelf holds the whole query and its result:
 
@@ -62,7 +66,7 @@ The shelf holds the whole query and its result:
   number of selected cards; **ALL** the chance of drawing every one of them.
   The second **−**/**+** row sets the ANY target.
 - **DRAW CHANCE** — selected count, required hits, and the resulting
-  probability. A **Held in hand** row appears when a selection includes retained
+  probability. A **Retained** row appears when a selection includes retained
   cards, which explains a lower-than-expected result.
 - **Show Odds on Cards** — prints each card's any-copy draw chance onto the
   cards themselves, using the same on-card readout as the Card Library's View

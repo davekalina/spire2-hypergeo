@@ -22,6 +22,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private const string ReshuffleMarkerText =
         "RESHUFFLE\nDiscard Pile + Cards in Hand\n→";
 
+    private const string RetainedMarkerText =
+        "RETAINED\nStays in Hand\nNot Reshuffled";
+
     private readonly NCardPileScreen _screen;
     private readonly Player _player;
     private readonly NCardGrid _grid;
@@ -117,7 +120,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         var result = _shelf.AddModule(_shelf.Top, "DRAW CHANCE");
         _selectedRow = _shelf.AddRow(result.Body, "Selected");
         _needRow = _shelf.AddRow(result.Body, "Need");
-        _heldRow = _shelf.AddRow(result.Body, "Held in hand");
+        _heldRow = _shelf.AddRow(result.Body, "Retained");
         _chanceRow = _shelf.AddRow(result.Body, "Chance");
 
         var overlayToggle = _shelf.AddToggle(_shelf.Bottom, "Show Odds on Cards", false);
@@ -235,9 +238,14 @@ internal sealed class AllCardsPileScreenView : IDisposable
     }
 
     /// <summary>
-    /// The two stages the next hand draws from, in order. The discard pile and the
-    /// cards in hand are one section because they are one population: the end of the
-    /// turn puts the hand in the discard, and the reshuffle returns them together.
+    /// The two stages the next hand draws from, in order, and then anything it cannot
+    /// reach at all.
+    ///
+    /// The discard pile and the cards in hand are one section because they are one
+    /// population: the end of the turn puts the hand in the discard, and the reshuffle
+    /// returns them together, so the grid sorts them as a single run. Retained cards
+    /// are pulled out into a trailing section — they are not reshuffled until they are
+    /// played and leave the hand, so no upcoming draw can reach them.
     /// </summary>
     private List<GridSection> BuildSections()
     {
@@ -245,17 +253,17 @@ internal sealed class AllCardsPileScreenView : IDisposable
         {
             new(Sort(_pools.Draw), MarkerText: null),
         };
-        var reshuffle = Sort(_pools.Discard).Concat(Sort(_pools.Hand)).ToList();
-        if (reshuffle.Count > 0)
-            sections.Add(new(reshuffle, ReshuffleMarkerText));
+        if (_pools.Reshuffle.Count > 0)
+            sections.Add(new(Sort(_pools.Reshuffle), ReshuffleMarkerText));
+        if (_pools.Retained.Count > 0)
+            sections.Add(new(Sort(_pools.Retained), RetainedMarkerText));
         return sections;
     }
 
     private void UpdateAnalysis()
     {
         var selectedTotal = _selectedCards.Count;
-        var heldInHand = _selectedCards.Count(
-            card => _pools.Hand.Contains(card) && _pools.IsRetained(card));
+        var retainedSelected = _selectedCards.Count(_pools.Retained.Contains);
         _targetHits = selectedTotal == 0 ? 1 : Math.Clamp(_targetHits, 1, selectedTotal);
         var requiredHits = _anyMode ? _targetHits : selectedTotal;
         var chance = selectedTotal == 0
@@ -273,8 +281,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         _selectedRow.Value.Text = selectedTotal.ToString();
         _needRow.Value.Text = selectedTotal == 0 ? "—" : requiredHits.ToString();
-        _heldRow.Root.Visible = heldInHand > 0;
-        _heldRow.Value.Text = heldInHand.ToString();
+        _heldRow.Root.Visible = retainedSelected > 0;
+        _heldRow.Value.Text = retainedSelected.ToString();
         _chanceRow.Value.Text = selectedTotal == 0
             ? "—"
             : Hypergeometric.FormatPercent(chance);
