@@ -19,7 +19,7 @@ public partial class MainFile : Node
     public static void Initialize()
     {
         new Harmony(ModId).PatchAll();
-        AllCardsHotkey.EnsureRegistered();
+        AllCardsHotkey.Install();
         Logger.Info($"{ModName} {Version} initialized.");
     }
 }

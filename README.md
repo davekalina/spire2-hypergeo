@@ -60,8 +60,8 @@ cannot diverge between screens.
 
 ## All Cards screen
 
-During combat, press **W** or use the **ALL** pile button beside Draw to open the
-mod's main screen: a Card Library shelf beside one continuous grid of every card the next
+During combat, press **W** (rebindable in Settings → Input) or use the **ALL**
+pile button beside Draw to open the mod's main screen: a Card Library shelf beside one continuous grid of every card the next
 hand could reach, in draw order. Like the Card Library, it draws over the run's
 top bar and relic inventory rather than under them.
 
@@ -99,21 +99,37 @@ The shelf holds the whole query and its result:
   tip explains the screen. That tip is `HelpText` in
   `HypergeoCode/AllCardsPileScreenView.cs`.
 
-### The keyboard shortcut
+### The shortcut
 
-**W** opens the screen and closes it again. The key is `AllCardsHotkey.Key` in
-`HypergeoCode/AllCardsHotkey.cs`; change it there and rebuild.
+**W** opens the screen and closes it again, and **Settings → Input** carries a
+**View All Cards** row for rebinding it to another key or to a controller button.
+
+The shortcut joins the game's input system rather than working around it.
+`NInputManager` holds the action → key and action → controller-button
+dictionaries, watches raw input, and synthesises an action event when a binding
+matches; Settings → Input builds one row per action from two lists of remappable
+actions and edits those same dictionaries. `AllCardsHotkey` registers the action
+with Godot — deliberately with no key event of its own, since a second input
+source would fire the shortcut twice and ignore any rebinding — and adds it to
+both lists so the row appears and accepts either kind of input.
+
+`InputSettingsPatch` supplies the rest:
+
+- The keyboard default goes into `DefaultKeyboardInputMap`, which is the base
+  every saved mapping is layered onto and exactly what **Reset to Default**
+  restores, so one patch covers a fresh profile, a returning one, and a reset.
+  A different default is a one-line change to `AllCardsHotkey.DefaultKey`.
+- The row's label is written directly, because every other row reads its title
+  from the game's localisation tables and a mod cannot add to those.
+- The first controller binding is made safe. Rebinding normally *swaps* buttons,
+  handing the displaced input whatever button the rebound action used to have —
+  but the game's defaults already spend every controller button, so this
+  shortcut starts unbound and has nothing to hand over. Binding it frees the
+  button instead, leaving whatever held it unbound and visible in the same list.
 
 Combat already uses A for the draw pile, S for the discard pile, D for the deck,
 X for the exhaust pile, M for the map, E to accept, Space to peek, and 1-0 to
 select cards, so W is free and sits in the same cluster as the pile keys.
-
-The game keeps its own remappable actions in `NInputManager`, which owns the
-Settings input screen and translates raw keys into actions itself. A mod cannot
-add a row to that screen, so this action carries a real key event on Godot's
-input map instead — `NHotkeyManager` dispatches whatever actions it holds
-bindings for, not only the game's own. The trade is that the shortcut cannot be
-rebound in game.
 
 ### What the screen remembers
 
