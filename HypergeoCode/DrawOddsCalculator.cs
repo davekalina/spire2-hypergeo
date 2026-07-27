@@ -1,58 +1,64 @@
 namespace Hypergeo.HypergeoCode;
 
+/// <summary>
+/// Two-stage draw odds. The draw pile is consumed first; a draw that empties it
+/// continues from the reshuffle pool, which is the discard pile plus every card the
+/// end of turn sends there. <see cref="DrawPools" /> builds that pool from live
+/// combat state.
+/// </summary>
 public static class DrawOddsCalculator
 {
     public static double AtLeastOneAcrossPiles(
         int drawPopulation,
         int drawSuccesses,
-        int discardPopulation,
-        int discardSuccesses,
+        int reshufflePopulation,
+        int reshuffleSuccesses,
         int cardsDrawn)
     {
-        if (drawPopulation < 0 || discardPopulation < 0 ||
+        if (drawPopulation < 0 || reshufflePopulation < 0 ||
             drawSuccesses < 0 || drawSuccesses > drawPopulation ||
-            discardSuccesses < 0 || discardSuccesses > discardPopulation ||
+            reshuffleSuccesses < 0 || reshuffleSuccesses > reshufflePopulation ||
             cardsDrawn < 0)
             throw new ArgumentOutOfRangeException();
 
         var drawsFromDrawPile = Math.Min(cardsDrawn, drawPopulation);
-        var drawsFromDiscard = Math.Min(
+        var drawsFromReshuffle = Math.Min(
             Math.Max(0, cardsDrawn - drawPopulation),
-            discardPopulation);
+            reshufflePopulation);
         var missDraw = 1 - Hypergeometric.AtLeastOne(
             drawPopulation, drawSuccesses, drawsFromDrawPile);
-        var missDiscard = 1 - Hypergeometric.AtLeastOne(
-            discardPopulation, discardSuccesses, drawsFromDiscard);
-        return 1 - missDraw * missDiscard;
+        var missReshuffle = 1 - Hypergeometric.AtLeastOne(
+            reshufflePopulation, reshuffleSuccesses, drawsFromReshuffle);
+        return 1 - missDraw * missReshuffle;
     }
 
     public static double AtLeastAcrossPiles(
         int drawPopulation,
         int drawSuccesses,
-        int discardPopulation,
-        int discardSuccesses,
+        int reshufflePopulation,
+        int reshuffleSuccesses,
         int cardsDrawn,
         int requiredHits)
     {
         if (requiredHits <= 0)
             return 1;
         var drawsFromDrawPile = Math.Min(cardsDrawn, drawPopulation);
-        var drawsFromDiscard = Math.Min(
+        var drawsFromReshuffle = Math.Min(
             Math.Max(0, cardsDrawn - drawPopulation),
-            discardPopulation);
+            reshufflePopulation);
         double probability = 0;
         for (var drawHits = 0; drawHits <= Math.Min(drawSuccesses, drawsFromDrawPile); drawHits++)
         {
             var drawProbability = Hypergeometric.Exactly(
                 drawPopulation, drawSuccesses, drawsFromDrawPile, drawHits);
-            for (var discardHits = 0;
-                 discardHits <= Math.Min(discardSuccesses, drawsFromDiscard);
-                 discardHits++)
+            for (var reshuffleHits = 0;
+                 reshuffleHits <= Math.Min(reshuffleSuccesses, drawsFromReshuffle);
+                 reshuffleHits++)
             {
-                if (drawHits + discardHits < requiredHits)
+                if (drawHits + reshuffleHits < requiredHits)
                     continue;
                 probability += drawProbability * Hypergeometric.Exactly(
-                    discardPopulation, discardSuccesses, drawsFromDiscard, discardHits);
+                    reshufflePopulation, reshuffleSuccesses, drawsFromReshuffle, reshuffleHits);
             }
         }
         return Math.Clamp(probability, 0, 1);

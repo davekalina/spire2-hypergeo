@@ -61,4 +61,35 @@ public sealed class HypergeometricTests
     [Fact]
     public void Exactly_ProducesKnownHypergeometricProbability() =>
         Assert.Equal(0.5, Hypergeometric.Exactly(10, 1, 5, 1), 12);
+
+    [Fact]
+    public void ReshufflePool_HandCardsDiluteTheSecondStage()
+    {
+        // Two cards in the draw pile and four in the discard. Drawing five empties
+        // the draw pile and takes three more after the reshuffle. Three cards in
+        // hand join that reshuffle at end of turn, so they thin the same pool.
+        var withoutHand = DrawOddsCalculator.AtLeastOneAcrossPiles(2, 0, 4, 1, 5);
+        var withHand = DrawOddsCalculator.AtLeastOneAcrossPiles(2, 0, 7, 1, 5);
+        Assert.Equal(Hypergeometric.AtLeastOne(4, 1, 3), withoutHand, 12);
+        Assert.Equal(Hypergeometric.AtLeastOne(7, 1, 3), withHand, 12);
+        Assert.True(withHand < withoutHand);
+    }
+
+    [Fact]
+    public void ReshufflePool_ACardOnlyInHandIsStillReachable()
+    {
+        // The one selected card sits in hand, so it becomes a success in the
+        // reshuffle pool rather than being unreachable.
+        Assert.Equal(Hypergeometric.AtLeastOne(5, 1, 2),
+            DrawOddsCalculator.AtLeastOneAcrossPiles(3, 0, 5, 1, 5), 12);
+    }
+
+    [Fact]
+    public void ReshufflePool_RetainedCardsAreOutsideEveryStage()
+    {
+        // Retain keeps a card in hand through the turn, so DrawPools leaves it out
+        // of the reshuffle pool entirely. No draw can ever reach it.
+        Assert.Equal(0, DrawOddsCalculator.AtLeastOneAcrossPiles(3, 0, 0, 0, 9), 12);
+        Assert.Equal(0, DrawOddsCalculator.AtLeastAcrossPiles(3, 0, 0, 0, 9, 1), 12);
+    }
 }

@@ -10,28 +10,16 @@ internal static class DrawChanceHoverTip
     public static void Show(
         NCardHolder holder,
         CardModel card,
-        IReadOnlyList<CardModel> drawCards,
-        IReadOnlyList<CardModel> discardCards,
+        DrawPools pools,
         int cardsDrawn)
     {
-        var inDiscardPile = discardCards.Contains(card);
         var identity = CardIdentity.From(card);
-        var matchingDrawCards = drawCards.Count(
-            candidate => CardIdentity.From(candidate) == identity);
-        var matchingDiscardCards = discardCards.Count(
-            candidate => CardIdentity.From(candidate) == identity);
-        var anyChance = DrawOddsCalculator.AtLeastOneAcrossPiles(
-            drawCards.Count,
-            matchingDrawCards,
-            discardCards.Count,
-            matchingDiscardCards,
-            cardsDrawn);
-        var thisChance = DrawOddsCalculator.AtLeastOneAcrossPiles(
-            drawCards.Count,
-            drawCards.Contains(card) ? 1 : 0,
-            discardCards.Count,
-            inDiscardPile ? 1 : 0,
-            cardsDrawn);
+        var inHand = pools.Hand.Contains(card);
+        var isRetained = inHand && pools.IsRetained(card);
+        var anyChance = pools.ChanceOfAny(
+            candidate => CardIdentity.From(candidate) == identity, cardsDrawn);
+        var thisChance = pools.ChanceOfAny(
+            candidate => ReferenceEquals(candidate, card), cardsDrawn);
         var anyPercent = Hypergeometric.FormatPercent(anyChance);
         var thisPercent = Hypergeometric.FormatPercent(thisChance);
         var rows = new List<(string Label, string Value)>
@@ -40,11 +28,21 @@ internal static class DrawChanceHoverTip
         };
         if (!string.Equals(anyPercent, thisPercent, StringComparison.Ordinal))
             rows.Add(($"This {card.Title}:", thisPercent));
+
+        var location = pools.Discard.Contains(card)
+            ? " (Discard Pile)"
+            : isRetained
+                ? " (Retained)"
+                : inHand
+                    ? " (In Hand)"
+                    : string.Empty;
+        var description = string.Join(
+            "\n", rows.Select(row => $"{row.Label} {row.Value}"));
+        if (isRetained)
+            description += "\nRetained cards stay in hand and are never drawn.";
         var analysisTip = NativeHoverTip.Create(
-            $"Draw Chance{(inDiscardPile ? " (Discard Pile)" : "")}",
-            string.Join(
-                "\n",
-                rows.Select(row => $"{row.Label} {row.Value}")),
+            $"Draw Chance{location}",
+            description,
             $"DrawOdds:{card.Id.Entry}:{card.GetHashCode()}");
 
         var tipSet = NHoverTipSet.CreateAndShow(
@@ -62,5 +60,4 @@ internal static class DrawChanceHoverTip
             NHoverTipSet.MethodName.SetAlignmentForCardHolder,
             holder);
     }
-
 }
