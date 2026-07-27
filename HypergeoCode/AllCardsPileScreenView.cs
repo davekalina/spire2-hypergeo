@@ -41,9 +41,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly Button _drawIncrease;
     private readonly Button _drawReset;
     private readonly MegaLabel _drawCountLabel;
-    private readonly Button _anyButton;
-    private readonly Button _allButton;
-    private readonly HBoxContainer _targetRow;
     private readonly Button _targetDecrease;
     private readonly Button _targetIncrease;
     private readonly MegaLabel _targetCountLabel;
@@ -55,7 +52,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly MegaLabel _queryNote;
 
     private DrawPools _pools;
-    private bool _anyMode = true;
     private int _chosenDrawCount;
     private int _targetHits = 1;
     private Node? _raisedContainer;
@@ -97,28 +93,17 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _drawNote = _shelf.AddNote(draw.Body, string.Empty, 13);
 
         var selection = _shelf.AddModule(_shelf.Top, "Selection");
-        var modeRow = NativeShelf.CreateControlRow();
-        var anyControl = _shelf.CreateButton(
-            "ANY", 78, "Calculate the chance of drawing at least N selected cards.");
-        var allControl = _shelf.CreateButton(
-            "ALL", 78, "Calculate the chance of drawing every selected card.");
-        _anyButton = anyControl.Input;
-        _allButton = allControl.Input;
-        modeRow.AddChild(anyControl.Root);
-        modeRow.AddChild(allControl.Root);
-        selection.Body.AddChild(modeRow);
-
-        _targetRow = NativeShelf.CreateControlRow();
+        var targetRow = NativeShelf.CreateControlRow();
         var targetDecreaseControl = _shelf.CreateButton("−", 48);
         var targetCountControl = _shelf.CreateDisplay(string.Empty, 52);
         var targetIncreaseControl = _shelf.CreateButton("+", 48);
         _targetDecrease = targetDecreaseControl.Input;
         _targetCountLabel = targetCountControl.Label;
         _targetIncrease = targetIncreaseControl.Input;
-        _targetRow.AddChild(targetDecreaseControl.Root);
-        _targetRow.AddChild(targetCountControl.Root);
-        _targetRow.AddChild(targetIncreaseControl.Root);
-        selection.Body.AddChild(_targetRow);
+        targetRow.AddChild(targetDecreaseControl.Root);
+        targetRow.AddChild(targetCountControl.Root);
+        targetRow.AddChild(targetIncreaseControl.Root);
+        selection.Body.AddChild(targetRow);
         _hintLabel = _shelf.AddCaption(selection.Body, string.Empty);
 
         var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
@@ -130,8 +115,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
         var overlayToggle = _shelf.AddToggle(_shelf.Bottom, "Show Odds on Cards", false);
         AddAboutRow();
 
-        _anyButton.Pressed += () => SetAnyMode(true);
-        _allButton.Pressed += () => SetAnyMode(false);
         _drawDecrease.Pressed += () => ChangeDrawCount(-1);
         _drawIncrease.Pressed += () => ChangeDrawCount(1);
         _drawReset.Pressed += ResetDrawCount;
@@ -197,8 +180,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     private static string HelpText =>
         "Odds that next turn's hand contains the cards you pick.\n\n" +
-        "Click cards to select them. ANY needs at least the target number of them; " +
-        "ALL needs every one.\n\n" +
+        "Click cards to select them, then set how many of them you need. One is " +
+        "'any of these'; all of them is 'every one of these'.\n\n" +
         "The draw pile is drawn first. Your discard pile and hand return together " +
         "on the reshuffle, so they share one section. Retained cards never leave " +
         "your hand and cannot be drawn.\n\n" +
@@ -309,45 +292,38 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         var selectedTotal = _selectedCards.Count;
         var retainedSelected = _selectedCards.Count(_pools.Retained.Contains);
-        _targetHits = selectedTotal == 0 ? 1 : Math.Clamp(_targetHits, 1, selectedTotal);
-        var requiredHits = _anyMode ? _targetHits : selectedTotal;
+        var requiredHits = selectedTotal == 0
+            ? 1
+            : Math.Clamp(_targetHits, 1, selectedTotal);
+        _targetHits = requiredHits;
         var chance = selectedTotal == 0
             ? 0
             : _pools.ChanceOfAtLeast(_selectedCards.Contains, _chosenDrawCount, requiredHits);
 
         _drawCountLabel.Text = _chosenDrawCount.ToString();
-        _targetCountLabel.Text = (_anyMode ? _targetHits : selectedTotal).ToString();
-        _targetRow.Visible = _anyMode;
+        _targetCountLabel.Text = requiredHits.ToString();
         _hintLabel.Text = selectedTotal == 0
             ? "select cards in the grid"
-            : _anyMode
-                ? $"of {selectedTotal} selected"
-                : $"all {selectedTotal} selected";
+            : $"of {selectedTotal} selected";
 
         _drawNote.Text = DescribeDrawCount();
         _queryNote.Text = DescribeQuery(selectedTotal, requiredHits);
         _needRow.Root.Visible = selectedTotal > 0;
-        _needRow.Value.Text = _anyMode
-            ? $"{requiredHits} of {selectedTotal}"
-            : $"all {selectedTotal}";
+        _needRow.Value.Text = $"{requiredHits} of {selectedTotal}";
         _heldRow.Root.Visible = retainedSelected > 0;
         _heldRow.Value.Text = retainedSelected.ToString();
         _chanceRow.Value.Text = selectedTotal == 0
             ? "—"
             : Hypergeometric.FormatPercent(chance);
 
-        NativeShelf.SetButtonState(_anyButton, enabled: !_anyMode, highlighted: _anyMode);
-        NativeShelf.SetButtonState(_allButton, enabled: _anyMode, highlighted: !_anyMode);
         NativeShelf.SetButtonState(_drawDecrease, enabled: _chosenDrawCount > 0);
         NativeShelf.SetButtonState(
             _drawIncrease, enabled: _chosenDrawCount < _pools.ReachableCount);
         NativeShelf.SetButtonState(_drawReset, enabled: true);
         NativeShelf.SetButtonState(
-            _targetDecrease,
-            enabled: _anyMode && selectedTotal > 0 && _targetHits > 1);
+            _targetDecrease, enabled: selectedTotal > 0 && requiredHits > 1);
         NativeShelf.SetButtonState(
-            _targetIncrease,
-            enabled: _anyMode && selectedTotal > 0 && _targetHits < selectedTotal);
+            _targetIncrease, enabled: selectedTotal > 0 && requiredHits < selectedTotal);
 
         RebuildOverlayText(selectedTotal, requiredHits, chance);
         RefreshPresentation();
@@ -383,14 +359,15 @@ internal sealed class AllCardsPileScreenView : IDisposable
             .Distinct()
             .ToList();
         var shown = names.Take(maxNames).ToList();
-        var joiner = _anyMode && requiredHits == 1 ? " or " : " and ";
+        var wantsEveryOne = requiredHits == selectedTotal;
+        var joiner = wantsEveryOne ? " and " : " or ";
         var listed = shown.Count == 1
             ? shown[0]
             : string.Join(", ", shown.Take(shown.Count - 1)) + joiner + shown[^1];
         if (names.Count > shown.Count)
             listed += $" +{names.Count - shown.Count} more";
 
-        return _anyMode && requiredHits > 1
+        return requiredHits > 1 && !wantsEveryOne
             ? $"Chance to draw {requiredHits} of {listed}:"
             : $"Chance to draw {listed}:";
     }
@@ -417,11 +394,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
             _selectionPercent = Hypergeometric.FormatPercent(chance);
             _selectionCaption = selectedTotal == 1
                 ? "This card"
-                : _anyMode
-                    ? requiredHits == 1
-                        ? $"Any of {selectedTotal}"
-                        : $"{requiredHits} of {selectedTotal}"
-                    : $"All {selectedTotal}";
+                : requiredHits == 1
+                    ? $"Any of {selectedTotal}"
+                    : requiredHits == selectedTotal
+                        ? $"All {selectedTotal}"
+                        : $"{requiredHits} of {selectedTotal}";
             return;
         }
 
@@ -597,12 +574,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
         UpdateAnalysis();
     }
 
-    private void SetAnyMode(bool anyMode)
-    {
-        _anyMode = anyMode;
-        UpdateAnalysis();
-    }
-
     private void ChangeDrawCount(int delta)
     {
         _chosenDrawCount = Math.Clamp(
@@ -612,7 +583,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     private void ChangeTargetCount(int delta)
     {
-        if (!_anyMode || _selectedCards.Count == 0)
+        if (_selectedCards.Count == 0)
             return;
         _targetHits = Math.Clamp(_targetHits + delta, 1, _selectedCards.Count);
         UpdateAnalysis();

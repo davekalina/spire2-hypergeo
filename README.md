@@ -81,9 +81,9 @@ The shelf holds the whole query and its result:
   the count restores the real next-turn draw, which is also restored every time
   the screen opens. While the count is set by hand the note says so and offers
   the real value.
-- **Selection** — **ANY** calculates the chance of drawing at least the chosen
-  number of selected cards; **ALL** the chance of drawing every one of them.
-  The second **−**/**+** row sets the ANY target.
+- **Selection** — how many of the selected cards the hand needs. One asks for
+  any of them; the full count asks for every one, so no separate ANY/ALL mode is
+  needed.
 - **Draw Chance** — states the question in words, naming the picked cards
   ("Chance to draw Strike or Neutralize:"), then the required hits and the
   probability. A **Retained** row appears when a selection includes retained
@@ -93,8 +93,9 @@ The shelf holds the whole query and its result:
   selected each card carries its own any-copy chance. Once cards are selected
   the question has changed, so only the selection is marked, and every badge
   carries the one joint chance the shelf reports, captioned with the query
-  (`Any of 3`, `2 of 3`, `All 3`) so it is not mistaken for that card's own
-  odds.
+  (`This card`, `Any of 3`, `2 of 3`, `All 3`) so it is not mistaken for that
+  card's own odds. The band spans the card's own art rect and sizes itself to
+  the text.
 - The footer carries the mod name and version, with a **?** button whose hover
   tip explains the screen.
 
