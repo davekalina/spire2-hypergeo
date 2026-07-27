@@ -1,4 +1,5 @@
 using Godot;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
@@ -29,7 +30,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly Player _player;
     private readonly NCardGrid _grid;
     private readonly MegaRichTextLabel _bottomLabel;
-    private readonly HashSet<CardModel> _selectedCards = [];
+    private readonly HashSet<CardModel> _selectedCards = AllCardsSession.SelectedCards;
     private readonly Godot.Timer _refreshTimer;
 
     private readonly NativeShelf _shelf;
@@ -53,11 +54,17 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     private DrawPools _pools;
     private int _chosenDrawCount;
-    private int _targetHits = 1;
     private Node? _raisedContainer;
     private int _raisedContainerIndex = -1;
     private string? _selectionPercent;
     private string? _selectionCaption;
+
+    /// <summary>How many of the selection the hand needs. Outlives the screen.</summary>
+    private int TargetHits
+    {
+        get => AllCardsSession.TargetHits;
+        set => AllCardsSession.TargetHits = value;
+    }
 
     public AllCardsPileScreenView(NCardPileScreen screen, Player player)
     {
@@ -65,8 +72,10 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _player = player;
         if (player.PlayerCombatState == null)
             throw new InvalidOperationException("All Cards requires active combat state.");
+        AllCardsSession.SyncToCombat(CombatManager.Instance.DebugOnlyGetState());
         _pools = DrawPools.Resolve(player);
-        _chosenDrawCount = _pools.NaturalDrawCount;
+        _chosenDrawCount = AllCardsSession.ResolveDrawCount(_pools.NaturalDrawCount);
+        _overlay.Enabled = AllCardsSession.ShowOddsOnCards;
         _grid = screen.GetNode<NCardGrid>("CardGrid");
         _bottomLabel = screen.GetNode<MegaRichTextLabel>("%BottomLabel");
         _refreshTimer = new Godot.Timer { WaitTime = 0.15, Autostart = true };
@@ -112,7 +121,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _heldRow = _shelf.AddRow(result.Body, "Retained");
         _chanceRow = _shelf.AddRow(result.Body, "Chance");
 
-        var overlayToggle = _shelf.AddToggle(_shelf.Bottom, "Show Odds on Cards", false);
+        var overlayToggle = _shelf.AddToggle(
+            _shelf.Bottom, "Show Odds on Cards", AllCardsSession.ShowOddsOnCards);
         AddAboutRow();
 
         _drawDecrease.Pressed += () => ChangeDrawCount(-1);
@@ -294,8 +304,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
         var retainedSelected = _selectedCards.Count(_pools.Retained.Contains);
         var requiredHits = selectedTotal == 0
             ? 1
-            : Math.Clamp(_targetHits, 1, selectedTotal);
-        _targetHits = requiredHits;
+            : Math.Clamp(TargetHits, 1, selectedTotal);
+        TargetHits = requiredHits;
         var chance = selectedTotal == 0
             ? 0
             : _pools.ChanceOfAtLeast(_selectedCards.Contains, _chosenDrawCount, requiredHits);
@@ -568,6 +578,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     private void OnOverlayToggled(NTickbox tickbox)
     {
+        AllCardsSession.ShowOddsOnCards = tickbox.IsTicked;
         _overlay.Enabled = tickbox.IsTicked;
         if (!_overlay.Enabled)
             _overlay.Clear();
@@ -578,6 +589,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         _chosenDrawCount = Math.Clamp(
             _chosenDrawCount + delta, 0, _pools.ReachableCount);
+        AllCardsSession.SetChosenDrawCount(_chosenDrawCount, _pools.NaturalDrawCount);
         UpdateAnalysis();
     }
 
@@ -585,7 +597,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         if (_selectedCards.Count == 0)
             return;
-        _targetHits = Math.Clamp(_targetHits + delta, 1, _selectedCards.Count);
+        TargetHits = Math.Clamp(TargetHits + delta, 1, _selectedCards.Count);
         UpdateAnalysis();
     }
 
@@ -593,6 +605,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         _pools = DrawPools.Resolve(_player);
         _chosenDrawCount = _pools.NaturalDrawCount;
+        AllCardsSession.ClearChosenDrawCount();
         UpdateAnalysis();
     }
 

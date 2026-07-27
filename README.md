@@ -78,9 +78,8 @@ The shelf holds the whole query and its result:
 
 - **Draw** — the **−**/**+** row sets how many cards the next hand draws, and
   the effects that moved it off the base of five are named underneath. Clicking
-  the count restores the real next-turn draw, which is also restored every time
-  the screen opens. While the count is set by hand the note says so and offers
-  the real value.
+  the count restores the real next-turn draw. While the count is set by hand the
+  note says so and offers the real value.
 - **Selection** — how many of the selected cards the hand needs. One asks for
   any of them; the full count asks for every one, so no separate ANY/ALL mode is
   needed.
@@ -97,7 +96,23 @@ The shelf holds the whole query and its result:
   card's own odds. The band spans the card's own art rect and sizes itself to
   the text.
 - The footer carries the mod name and version, with a **?** button whose hover
-  tip explains the screen.
+  tip explains the screen. That tip is `HelpText` in
+  `HypergeoCode/AllCardsPileScreenView.cs`.
+
+### What the screen remembers
+
+The game builds a fresh screen every time the pile view opens, so `AllCardsSession`
+holds what would otherwise be discarded on close:
+
+- **Show Odds on Cards** is a display preference and lasts as long as the game does.
+- The **selection**, the **number needed**, and any **hand-picked draw count**
+  belong to one combat and are dropped when a different combat begins.
+
+Selections hold card instances, so playing or discarding a selected card does not
+deselect it — it is the same card in a different pile. A card that leaves the
+reachable pools entirely is pruned on the next render. A hand-picked draw count is
+kept only while the real next-turn draw is unchanged; once the situation moves,
+the honest number wins.
 
 ## Build
 
