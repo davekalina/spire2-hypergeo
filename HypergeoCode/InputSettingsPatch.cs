@@ -30,6 +30,17 @@ internal static class InputSettingsPatch
         __result[AllCardsHotkey.Action] = AllCardsHotkey.DefaultKey;
 
     /// <summary>
+    /// A saved controller mapping is layered onto the defaults, so the takeover has to
+    /// be reapplied afterwards or a previously saved Draw Pile binding puts that action
+    /// back on the button.
+    /// </summary>
+    [HarmonyPostfix]
+    [HarmonyPatch(nameof(NInputManager.MergeSavedControllerBindings))]
+    private static void AfterMergeSavedControllerBindings(
+        Dictionary<StringName, StringName> __result) =>
+        AllCardsHotkey.ApplyDrawPileTakeover(__result);
+
+    /// <summary>
     /// Rebinding a controller button swaps it with whatever held it, by giving that
     /// input the button the rebound action used to have. The shortcut starts with no
     /// controller button at all, so there is nothing to hand over and the game would
@@ -58,6 +69,20 @@ internal static class InputSettingsPatch
                      .ToList())
             map.Remove(held);
     }
+}
+
+/// <summary>
+/// The other path the controller map is built from: a profile with no saved mapping,
+/// and every Reset to Default.
+/// </summary>
+[HarmonyPatch(typeof(NControllerManager))]
+internal static class ControllerDefaultsPatch
+{
+    [HarmonyPostfix]
+    [HarmonyPatch(nameof(NControllerManager.GetDefaultControllerInputMap), MethodType.Getter)]
+    private static void AfterGetDefaultControllerInputMap(
+        Dictionary<StringName, StringName> __result) =>
+        AllCardsHotkey.ApplyDrawPileTakeover(__result);
 }
 
 /// <summary>Gives the shortcut's settings row a readable name.</summary>

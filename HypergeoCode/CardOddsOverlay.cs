@@ -28,7 +28,7 @@ internal sealed class CardOddsOverlay : IDisposable
     private const float BandLeft = -120f;
     private const float BandRight = 120f;
     private const float BandTop = -138f + MinBandHeight;
-    private const float MinBandHeight = 60f;
+    private const float MinBandHeight = 84f;
     private const float BandPadding = 10f;
     private const int CaptionFontSize = 17;
 

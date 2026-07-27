@@ -131,6 +131,33 @@ Combat already uses A for the draw pile, S for the discard pile, D for the deck,
 X for the exhaust pile, M for the map, E to accept, Space to peek, and 1-0 to
 select cards, so W is free and sits in the same cluster as the pile keys.
 
+### Controllers, and Steam Input
+
+A press reaches a game action in three hops:
+
+```text
+button → [Steam binding] → Steam action → Controller.* input → game action
+```
+
+Steam owns only the first hop. Its action set is fixed at the fifteen buttons
+declared in `<game>/controller_config/game_actions_2868840.vdf`, which a mod
+cannot add to, and while Steam Input is active the game disables its own
+controller rebinding entirely — `ShouldAllowControllerRebinding` returns false.
+That is why a binding set in game appears to be ignored.
+
+The last hop is the game's own dictionary, though, and it is reachable. So
+**Settings → Mod Settings → Hypergeometric Draw Odds** offers **All Cards on the
+Draw Pile button**, off by default. Turning it on points the Draw Pile button at
+this screen instead, which works whether or not Steam Input is in the picture.
+The draw pile gives the button up rather than sharing it — both bindings would
+otherwise fire at once — which is a fair trade only because the All Cards screen
+shows the draw pile and then some. The setting applies immediately and is
+remembered in `user://hypergeo_settings.cfg`.
+
+Without that setting the shortcut starts unbound on a controller and can be
+bound to any button from Settings → Input, at the cost of whatever action holds
+that button.
+
 ### What the screen remembers
 
 The game builds a fresh screen every time the pile view opens, so `AllCardsSession`
