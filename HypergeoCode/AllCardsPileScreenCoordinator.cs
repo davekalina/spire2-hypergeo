@@ -17,9 +17,11 @@ internal static class AllCardsPileScreenCoordinator
         _isOpening = true;
         try
         {
+            // Listing the shortcut alongside back makes the screen close on the same
+            // key that opened it, through the game's own close-hotkey mechanism.
             NCardPileScreen.ShowScreen(
                 player.PlayerCombatState!.DrawPile,
-                [MegaInput.pauseAndBack.ToString()]);
+                [MegaInput.pauseAndBack.ToString(), AllCardsHotkey.Action]);
         }
         finally
         {

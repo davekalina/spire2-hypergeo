@@ -25,8 +25,8 @@ internal sealed class CardOddsOverlay : IDisposable
     // art (scenes/cards/card.tscn, the Portrait node) runs -125..125 across and
     // -168..22 down, so the band spans the art exactly and sits within it. The Card
     // Library places its own readout at -138; one band lower clears the title ribbon.
-    private const float BandLeft = -125f;
-    private const float BandRight = 125f;
+    private const float BandLeft = -120f;
+    private const float BandRight = 120f;
     private const float BandTop = -138f + MinBandHeight;
     private const float MinBandHeight = 60f;
     private const float BandPadding = 10f;

@@ -2,6 +2,9 @@ using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Nodes.Combat;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Nodes.Screens;
+using MegaCrit.Sts2.Core.Nodes.Screens.Capstones;
 using MegaCrit.Sts2.addons.mega_text;
 
 namespace Hypergeo.HypergeoCode;
@@ -40,6 +43,11 @@ internal sealed class AllCardsScreenView : IDisposable
         var count = _visualButton.GetNode<MegaLabel>("CountContainer/Count");
         count.SetTextAutoSize("ALL");
         count.PivotOffset = count.Size * 0.5f;
+        // Live only while combat has a UI, the same lifetime as the button itself.
+        // The screen registers the same key as one of its close hotkeys, and the
+        // hotkey manager runs the most recent binding, so it toggles.
+        NHotkeyManager.Instance?.PushHotkeyReleasedBinding(
+            AllCardsHotkey.Action, OpenFromHotkey);
     }
 
     public void Dispose()
@@ -47,6 +55,8 @@ internal sealed class AllCardsScreenView : IDisposable
         _inputButton.Pressed -= Open;
         _inputButton.MouseEntered -= OnMouseEntered;
         _inputButton.MouseExited -= OnMouseExited;
+        NHotkeyManager.Instance?.RemoveHotkeyReleasedBinding(
+            AllCardsHotkey.Action, OpenFromHotkey);
         if (GodotObject.IsInstanceValid(_visualButton))
             _visualButton.QueueFree();
     }
@@ -56,6 +66,21 @@ internal sealed class AllCardsScreenView : IDisposable
         var player = ResolvePlayer();
         if (player?.PlayerCombatState != null)
             AllCardsPileScreenCoordinator.Open(player);
+    }
+
+    /// <summary>
+    /// The button ignores clicks while combat is not accepting them; the shortcut has
+    /// to check for itself. A screen that is asking the player for something is left
+    /// alone — the pile screens are the only ones worth switching away from.
+    /// </summary>
+    private void OpenFromHotkey()
+    {
+        if (!CombatManager.Instance.IsInProgress)
+            return;
+        if (NCapstoneContainer.Instance is { InUse: true } capstone &&
+            capstone.CurrentCapstoneScreen is not NCardPileScreen)
+            return;
+        Open();
     }
 
     private void OnMouseEntered()

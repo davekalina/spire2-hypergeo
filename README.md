@@ -60,8 +60,8 @@ cannot diverge between screens.
 
 ## All Cards screen
 
-During combat, use the **ALL** pile button beside Draw to open the mod's main
-screen: a Card Library shelf beside one continuous grid of every card the next
+During combat, press **W** or use the **ALL** pile button beside Draw to open the
+mod's main screen: a Card Library shelf beside one continuous grid of every card the next
 hand could reach, in draw order. Like the Card Library, it draws over the run's
 top bar and relic inventory rather than under them.
 
@@ -98,6 +98,22 @@ The shelf holds the whole query and its result:
 - The footer carries the mod name and version, with a **?** button whose hover
   tip explains the screen. That tip is `HelpText` in
   `HypergeoCode/AllCardsPileScreenView.cs`.
+
+### The keyboard shortcut
+
+**W** opens the screen and closes it again. The key is `AllCardsHotkey.Key` in
+`HypergeoCode/AllCardsHotkey.cs`; change it there and rebuild.
+
+Combat already uses A for the draw pile, S for the discard pile, D for the deck,
+X for the exhaust pile, M for the map, E to accept, Space to peek, and 1-0 to
+select cards, so W is free and sits in the same cluster as the pile keys.
+
+The game keeps its own remappable actions in `NInputManager`, which owns the
+Settings input screen and translates raw keys into actions itself. A mod cannot
+add a row to that screen, so this action carries a real key event on Godot's
+input map instead — `NHotkeyManager` dispatches whatever actions it holds
+bindings for, not only the game's own. The trade is that the shortcut cannot be
+rebound in game.
 
 ### What the screen remembers
 

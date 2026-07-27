@@ -174,7 +174,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private void AddAboutRow()
     {
         var row = NativeShelf.CreateFullWidthRow(4);
-        var label = _shelf.CreateText($"{MainFile.ModName}\n{MainFile.Version}", 13);
+        var label = _shelf.CreateText($"{MainFile.ModName}\n{MainFile.Version} by realtruegravy", 13);
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         label.HorizontalAlignment = HorizontalAlignment.Left;
         label.VerticalAlignment = VerticalAlignment.Center;
@@ -189,15 +189,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
     }
 
     private static string HelpText =>
-        "Odds that next turn's hand contains the cards you pick.\n\n" +
-        "Click cards to select them, then set how many of them you need. One is " +
-        "'any of these'; all of them is 'every one of these'.\n\n" +
-        "The draw pile is drawn first. Your discard pile and hand return together " +
-        "on the reshuffle, so they share one section. Retained cards never leave " +
-        "your hand and cannot be drawn.\n\n" +
-        "The draw count is what next turn will deal, after relics, powers, retain, " +
-        "and hand size. Use − and + to ask about a different number; click the " +
-        "count to restore the real one.";
+        "Select cards to calculate the chance they are drawn in the next N cards.";
+        // "on the reshuffle, so they share one section. Retained cards never leave " +
+        // "your hand and cannot be drawn.\n\n" +
+        // "The draw count is what next turn will deal, after relics, powers, retain, " +
+        // "and hand size. Use − and + to ask about a different number; click the " +
+        // "count to restore the real one.";
 
     /// <summary>
     /// Draw over the run's top bar and relic inventory, the way the Card Library owns
