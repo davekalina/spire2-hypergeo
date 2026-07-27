@@ -409,20 +409,22 @@ internal sealed class AllCardsPileScreenView : IDisposable
         if (index < _markers.Count && GodotObject.IsInstanceValid(_markers[index]))
             return _markers[index];
 
+        // Leave both z indices at 0. The game's hover tips sit at an absolute
+        // z_index of 0, so any positive value here paints the marker over every
+        // tooltip. At 0 the marker sorts by tree order: below the card holders,
+        // which is right, since its own slot is always empty.
         var root = new Control
         {
             Name = $"HypergeoSectionMarker{index}",
             CustomMinimumSize = cardSize,
             Size = cardSize,
             MouseFilter = Control.MouseFilterEnum.Ignore,
-            ZIndex = 40,
         };
         var label = _shelf.CreateText(string.Empty, 17);
         label.Name = "MarkerLabel";
         label.Size = cardSize;
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.VerticalAlignment = VerticalAlignment.Center;
-        label.ZIndex = 1;
         root.AddChild(label);
         parent.AddChild(root);
 
