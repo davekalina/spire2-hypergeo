@@ -28,20 +28,29 @@ Odds are computed in two stages, in the order the game draws:
 Cards a retain effect keeps in hand never leave it, so they are excluded from
 both stages and always read 0%.
 
-`DrawPools` builds these populations from live combat state, and every screen
-resolves its odds through it, so the piles, the natural draw count, and the
-reshuffle model cannot diverge between screens.
+The draw count is predicted for the turn that is coming, not the one in
+progress. Draw modifiers are turn-sensitive — Ring of the Snake and Bag of
+Preparation only add on turn 1, Pocketwatch only pays out from turn 2, Ring of
+the Drake only inside a turn window — and the game runs those hooks after it
+increments the turn number. `DrawPools` therefore evaluates them one turn ahead,
+so Silent's opening hand of 7 correctly predicts 5 for turn 2.
+
+`DrawPools` builds all of this from live combat state, and every screen resolves
+its odds through it, so the piles, the draw count, and the reshuffle model
+cannot diverge between screens.
 
 ## All Cards screen
 
 During combat, use the **ALL** pile button beside Draw to open the mod's main
 screen: a Card Library shelf beside one continuous grid of every card the next
-hand could reach, in draw order.
+hand could reach, in draw order. Like the Card Library, it draws over the run's
+top bar and relic inventory rather than under them.
 
-The grid runs Draw Pile, then Discard Pile, then Cards in Hand, with a
-card-sized **DISCARD PILE →** and **CARDS IN HAND →** marker at each boundary.
-Card clicks toggle exact physical copies, and hovering shows the same native
-Draw Chance tooltip the individual pile screens use.
+The grid runs the draw pile, then a card-sized **RESHUFFLE — Discard Pile +
+Cards in Hand →** marker, then the reshuffle pool itself. The discard pile and
+the hand share one section because they are one population: they return to the
+draw pile together. Card clicks toggle exact physical copies, and hovering shows
+the same native Draw Chance tooltip the individual pile screens use.
 
 The shelf holds the whole query and its result:
 
@@ -100,6 +109,7 @@ only link between this repository and the published Workshop item.
 Formerly `draw-odds`, mod id `DrawOdds`, display name "Draw Odds". Renamed at
 v0.5.0 so the identity is settled before the first Workshop publish.
 
-v0.6.0 rebuilt the All Cards screen around the Card Library shelf, added the
-Cards in Hand section, and folded the hand into the reshuffle pool. Before that,
-cards in hand were absent from the screen and from the odds entirely.
+v0.6.0 rebuilt the All Cards screen around the Card Library shelf and folded the
+hand into the reshuffle pool. Before that, cards in hand were absent from the
+screen and from the odds entirely, and the draw count was predicted for the turn
+in progress rather than the next one.

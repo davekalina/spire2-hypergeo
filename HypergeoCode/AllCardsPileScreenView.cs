@@ -19,6 +19,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
 {
     private const float CardPadding = 40f;
 
+    private const string ReshuffleMarkerText =
+        "RESHUFFLE\nDiscard Pile + Cards in Hand\n→";
+
     private readonly NCardPileScreen _screen;
     private readonly Player _player;
     private readonly NCardGrid _grid;
@@ -51,6 +54,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private bool _anyMode = true;
     private int _chosenDrawCount;
     private int _targetHits = 1;
+    private Node? _raisedContainer;
+    private int _raisedContainerIndex = -1;
 
     public AllCardsPileScreenView(NCardPileScreen screen, Player player)
     {
@@ -131,6 +136,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     public void Attach()
     {
         _screen.Name = "NCardPileScreen-AllCards";
+        RaiseAboveRunUi();
         // Behind the back button, exactly where the Card Library puts its sidebar.
         _screen.AddChild(_shelf.Root);
         _screen.MoveChild(_shelf.Root, _grid.GetIndex() + 1);
@@ -158,6 +164,39 @@ internal sealed class AllCardsPileScreenView : IDisposable
                 marker.QueueFree();
         _markers.Clear();
         _shelf.Dispose();
+        RestoreRunUiOrder();
+    }
+
+    /// <summary>
+    /// Draw over the run's top bar and relic inventory, the way the Card Library owns
+    /// the whole screen.
+    ///
+    /// Both sit after the capstone container under GlobalUi, so they paint over every
+    /// capstone screen and take its clicks — which is why the native pile screens
+    /// inset their grid below the top bar instead of covering it. Ordering the
+    /// container last lifts the screen above them for drawing and for input alike.
+    /// Only one capstone screen can be open, so nothing else is affected, and the
+    /// original order is restored when this screen closes.
+    /// </summary>
+    private void RaiseAboveRunUi()
+    {
+        if (_screen.GetParent() is not { } container ||
+            container.GetParent() is not { } runUi)
+            return;
+        _raisedContainer = container;
+        _raisedContainerIndex = container.GetIndex();
+        runUi.MoveChild(container, runUi.GetChildCount() - 1);
+    }
+
+    private void RestoreRunUiOrder()
+    {
+        if (_raisedContainer == null ||
+            !GodotObject.IsInstanceValid(_raisedContainer) ||
+            _raisedContainerIndex < 0)
+            return;
+        if (_raisedContainer.GetParent() is { } runUi)
+            runUi.MoveChild(_raisedContainer, _raisedContainerIndex);
+        _raisedContainer = null;
     }
 
     private IEnumerable<CardPile> Piles()
@@ -196,19 +235,19 @@ internal sealed class AllCardsPileScreenView : IDisposable
     }
 
     /// <summary>
-    /// The three populations in the order the next hand reaches them: the draw pile,
-    /// then the discard pile, then the cards in hand that join it at end of turn.
+    /// The two stages the next hand draws from, in order. The discard pile and the
+    /// cards in hand are one section because they are one population: the end of the
+    /// turn puts the hand in the discard, and the reshuffle returns them together.
     /// </summary>
     private List<GridSection> BuildSections()
     {
         var sections = new List<GridSection>
         {
-            new("DRAW PILE", Sort(_pools.Draw), ShowMarker: false),
+            new(Sort(_pools.Draw), MarkerText: null),
         };
-        if (_pools.Discard.Count > 0)
-            sections.Add(new("DISCARD PILE", Sort(_pools.Discard), ShowMarker: true));
-        if (_pools.Hand.Count > 0)
-            sections.Add(new("CARDS IN HAND", Sort(_pools.Hand), ShowMarker: true));
+        var reshuffle = Sort(_pools.Discard).Concat(Sort(_pools.Hand)).ToList();
+        if (reshuffle.Count > 0)
+            sections.Add(new(reshuffle, ReshuffleMarkerText));
         return sections;
     }
 
@@ -323,12 +362,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         // A null slot is a section marker; everything else is a card in draw order.
         var slots = new List<CardModel?>();
-        var markerSlots = new List<(int Index, string Title)>();
+        var markerSlots = new List<(int Index, string Text)>();
         foreach (var section in sections)
         {
-            if (section.ShowMarker)
+            if (section.MarkerText != null)
             {
-                markerSlots.Add((slots.Count, section.Title));
+                markerSlots.Add((slots.Count, section.MarkerText));
                 slots.Add(null);
             }
             slots.AddRange(section.Cards);
@@ -347,8 +386,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         for (var index = 0; index < markerSlots.Count; index++)
         {
             var marker = ResolveMarker(index, scrollContainer, cardSize);
-            marker.GetNode<MegaLabel>("MarkerLabel").Text =
-                $"{markerSlots[index].Title}\n→";
+            marker.GetNode<MegaLabel>("MarkerLabel").Text = markerSlots[index].Text;
             marker.Visible = true;
             marker.CustomMinimumSize = cardSize;
             marker.Size = cardSize;
@@ -464,6 +502,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             .ThenBy(card => card.Id.Entry, StringComparer.Ordinal)
             .ToList();
 
+    /// <summary>A run of cards in the grid, optionally opened by a marker slot.</summary>
     private sealed record GridSection(
-        string Title, IReadOnlyList<CardModel> Cards, bool ShowMarker);
+        IReadOnlyList<CardModel> Cards, string? MarkerText);
 }
