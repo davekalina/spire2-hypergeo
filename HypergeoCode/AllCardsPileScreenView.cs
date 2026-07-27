@@ -244,10 +244,19 @@ internal sealed class AllCardsPileScreenView : IDisposable
         yield return combatState.Hand;
     }
 
-    /// <summary>Give the shelf its column, matching the Card Library's own grid inset.</summary>
+    /// <summary>
+    /// Lay the grid out exactly as the Card Library lays out its own: inset from the
+    /// left by the width of the shelf, and otherwise the full viewport.
+    ///
+    /// NCardPileScreen._Ready calls InsetForTopBar, which drops the grid 80 px so it
+    /// clears the run's top bar. This screen covers that bar, so the inset only served
+    /// to strand the grid's top fade in open space partway down the screen. At full
+    /// height the fade sits on the screen edge, which is what it is drawn for.
+    /// </summary>
     private void InsetGridForShelf()
     {
         _grid.OffsetLeft = NativeShelf.Width;
+        _grid.OffsetTop = 0f;
         var scrollContainer = _grid.GetNode<Control>("%ScrollContainer");
         scrollContainer.OffsetLeft = 50f;
         scrollContainer.OffsetRight = -150f;

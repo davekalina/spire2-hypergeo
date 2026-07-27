@@ -21,6 +21,9 @@ internal sealed class CardOddsOverlay : IDisposable
     private const string StatsScene = "screens/card_library/card_library_stats";
     private const string BadgeName = "HypergeoOddsBadge";
 
+    /// <summary>Height of the readout band, in unscaled card pixels.</summary>
+    private const float BandHeight = 60f;
+
     private readonly Dictionary<ulong, Control> _badges = [];
 
     /// <summary>Whether the badges are drawn at all.</summary>
@@ -77,9 +80,11 @@ internal sealed class CardOddsOverlay : IDisposable
 
         // The library's readout is a tall block sized for several stat lines. One
         // percentage needs a single band, so shorten it and leave the card art visible.
+        // It sits a band's height below the library's placement, clear of the card's
+        // title ribbon and the top edge of the art.
         var background = badge.GetNode<Control>("Bg");
-        background.OffsetTop = -138f;
-        background.OffsetBottom = -78f;
+        background.OffsetTop = -138f + BandHeight;
+        background.OffsetBottom = -138f + BandHeight * 2f;
 
         holder.AddChild(badge);
         _badges[id] = badge;
