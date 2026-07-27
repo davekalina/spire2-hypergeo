@@ -21,16 +21,24 @@ internal sealed class CardOddsOverlay : IDisposable
     private const string StatsScene = "screens/card_library/card_library_stats";
     private const string BadgeName = "HypergeoOddsBadge";
 
-    /// <summary>Height of the readout band, in unscaled card pixels.</summary>
+    // Measurements in unscaled card pixels, relative to the card's centre. The Card
+    // Library places its readout at -138; one band lower clears the title ribbon and
+    // the top edge of the art.
+    private const float BandTop = -138f + BandHeight;
     private const float BandHeight = 60f;
+    private const float CaptionBandHeight = 78f;
+    private const int CaptionFontSize = 17;
 
     private readonly Dictionary<ulong, Control> _badges = [];
 
     /// <summary>Whether the badges are drawn at all.</summary>
     public bool Enabled { get; set; }
 
-    /// <summary>Show <paramref name="text" /> on a holder, creating its badge on demand.</summary>
-    public void Show(NCardHolder holder, string text)
+    /// <summary>
+    /// Show a chance on a holder, creating its badge on demand. A caption names the
+    /// query when the percentage answers something other than "this card on its own".
+    /// </summary>
+    public void Show(NCardHolder holder, string percent, string? caption = null)
     {
         if (!Enabled)
         {
@@ -44,7 +52,16 @@ internal sealed class CardOddsOverlay : IDisposable
         if (badge == null)
             return;
         badge.Visible = true;
-        badge.GetNode<MegaRichTextLabel>("%Label").Text = $"[center]{text}";
+
+        var background = badge.GetNode<Control>("Bg");
+        background.OffsetTop = BandTop;
+        background.OffsetBottom =
+            BandTop + (caption == null ? BandHeight : CaptionBandHeight);
+
+        var label = badge.GetNode<MegaRichTextLabel>("%Label");
+        label.Text = caption == null
+            ? $"[center]{percent}"
+            : $"[center][font_size={CaptionFontSize}]{caption}[/font_size]\n{percent}";
     }
 
     public void Hide(NCardHolder holder)
@@ -77,14 +94,10 @@ internal sealed class CardOddsOverlay : IDisposable
         var badge = SceneHelper.Instantiate<Control>(StatsScene);
         badge.Name = BadgeName;
         badge.MouseFilter = Control.MouseFilterEnum.Ignore;
-
-        // The library's readout is a tall block sized for several stat lines. One
-        // percentage needs a single band, so shorten it and leave the card art visible.
-        // It sits a band's height below the library's placement, clear of the card's
-        // title ribbon and the top edge of the art.
-        var background = badge.GetNode<Control>("Bg");
-        background.OffsetTop = -138f + BandHeight;
-        background.OffsetBottom = -138f + BandHeight * 2f;
+        // The library's readout auto-sizes its font to fill a block sized for several
+        // stat lines. This band is short and sets its own sizes through bbcode, so the
+        // caption would otherwise be rescaled out of proportion with the percentage.
+        badge.GetNode<MegaRichTextLabel>("%Label").AutoSizeEnabled = false;
 
         holder.AddChild(badge);
         _badges[id] = badge;

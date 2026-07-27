@@ -60,6 +60,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private int _targetHits = 1;
     private Node? _raisedContainer;
     private int _raisedContainerIndex = -1;
+    private string? _selectionPercent;
+    private string? _selectionCaption;
 
     public AllCardsPileScreenView(NCardPileScreen screen, Player player)
     {
@@ -347,7 +349,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             _targetIncrease,
             enabled: _anyMode && selectedTotal > 0 && _targetHits < selectedTotal);
 
-        RebuildOverlayText();
+        RebuildOverlayText(selectedTotal, requiredHits, chance);
         RefreshPresentation();
     }
 
@@ -394,23 +396,44 @@ internal sealed class AllCardsPileScreenView : IDisposable
     }
 
     /// <summary>
-    /// One any-copy chance per distinct card, so the per-card badges agree with the
-    /// headline row of the native Draw Chance hover tip.
+    /// What the on-card badges say.
+    ///
+    /// With nothing selected, each card carries its own any-copy chance, matching the
+    /// headline row of the native Draw Chance hover tip. Once cards are selected the
+    /// question has changed: the grid stops answering per card and marks only the
+    /// selection, every badge carrying the one joint chance the shelf reports, captioned
+    /// with the query so the number is not mistaken for that card's own odds.
     /// </summary>
-    private void RebuildOverlayText()
+    private void RebuildOverlayText(int selectedTotal, int requiredHits, double chance)
     {
         _overlayText.Clear();
+        _selectionPercent = null;
+        _selectionCaption = null;
         if (!_overlay.Enabled)
             return;
+
+        if (selectedTotal > 0)
+        {
+            _selectionPercent = Hypergeometric.FormatPercent(chance);
+            _selectionCaption = selectedTotal == 1
+                ? "This card"
+                : _anyMode
+                    ? requiredHits == 1
+                        ? $"Any of {selectedTotal}"
+                        : $"{requiredHits} of {selectedTotal}"
+                    : $"All {selectedTotal}";
+            return;
+        }
+
         foreach (var identity in _pools.Draw
                      .Concat(_pools.Discard)
                      .Concat(_pools.Hand)
                      .Select(CardIdentity.From)
                      .Distinct())
         {
-            var chance = _pools.ChanceOfAny(
+            var anyCopy = _pools.ChanceOfAny(
                 card => CardIdentity.From(card) == identity, _chosenDrawCount);
-            _overlayText[identity] = Hypergeometric.FormatPercent(chance);
+            _overlayText[identity] = Hypergeometric.FormatPercent(anyCopy);
         }
     }
 
@@ -422,13 +445,19 @@ internal sealed class AllCardsPileScreenView : IDisposable
         {
             if (holder.CardModel is not { } card)
                 continue;
-            if (_selectedCards.Contains(card))
+            var isSelected = _selectedCards.Contains(card);
+            if (isSelected)
                 _grid.HighlightCard(card);
             else
                 _grid.UnhighlightCard(card);
-            if (_overlay.Enabled &&
-                _overlayText.TryGetValue(CardIdentity.From(card), out var text))
-                _overlay.Show(holder, text);
+
+            if (_selectionPercent is { } selectionPercent)
+                if (isSelected)
+                    _overlay.Show(holder, selectionPercent, _selectionCaption);
+                else
+                    _overlay.Hide(holder);
+            else if (_overlayText.TryGetValue(CardIdentity.From(card), out var anyCopy))
+                _overlay.Show(holder, anyCopy);
             else
                 _overlay.Hide(holder);
         }

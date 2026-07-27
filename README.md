@@ -88,9 +88,13 @@ The shelf holds the whole query and its result:
   ("Chance to draw Strike or Neutralize:"), then the required hits and the
   probability. A **Retained** row appears when a selection includes retained
   cards, which explains a lower-than-expected result.
-- **Show Odds on Cards** — prints each card's any-copy draw chance onto the
-  cards themselves, using the same on-card readout as the Card Library's View
-  Stats toggle.
+- **Show Odds on Cards** — prints chances onto the cards themselves, using the
+  same on-card readout as the Card Library's View Stats toggle. With nothing
+  selected each card carries its own any-copy chance. Once cards are selected
+  the question has changed, so only the selection is marked, and every badge
+  carries the one joint chance the shelf reports, captioned with the query
+  (`Any of 3`, `2 of 3`, `All 3`) so it is not mistaken for that card's own
+  odds.
 - The footer carries the mod name and version, with a **?** button whose hover
   tip explains the screen.
 
