@@ -211,11 +211,15 @@ internal sealed class AllCardsPileScreenView : IDisposable
     /// </summary>
     private void AddCalculatorModules()
     {
+        // The rows are named for cards; the hover tips name the same things for anyone
+        // reading a statistics text alongside.
         var inputs = _shelf.AddModule(_shelf.Top, "Calculator");
-        _population = _shelf.AddStepperRow(inputs.Body, "Deck");
-        _sample = _shelf.AddStepperRow(inputs.Body, "Draw");
-        _successes = _shelf.AddStepperRow(inputs.Body, "Hits in deck");
-        _wanted = _shelf.AddStepperRow(inputs.Body, "Hits wanted");
+        _population = _shelf.AddStepperRow(inputs.Body, "Deck", "Population");
+        _sample = _shelf.AddStepperRow(inputs.Body, "Draw", "Sample Size");
+        _successes = _shelf.AddStepperRow(
+            inputs.Body, "Hits in deck", "Successes in population");
+        _wanted = _shelf.AddStepperRow(
+            inputs.Body, "Hits wanted", "Successes in sample");
 
         var results = _shelf.AddModule(_shelf.Top, "Odds");
         _exactlyRow = _shelf.AddRow(results.Body, "Exactly");

@@ -242,7 +242,8 @@ internal sealed class NativeShelf : IDisposable
     /// A named value with a stepper: the label reads left, the controls sit right.
     /// Tighter than a caption over a centred row, which matters when several stack up.
     /// </summary>
-    public ShelfStepper AddStepperRow(VBoxContainer parent, string label)
+    public ShelfStepper AddStepperRow(
+        VBoxContainer parent, string label, string? hoverDescription = null)
     {
         var row = new HBoxContainer { Name = $"{label}Stepper" };
         row.AddThemeConstantOverride("separation", 4);
@@ -252,6 +253,17 @@ internal sealed class NativeShelf : IDisposable
         caption.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         caption.HorizontalAlignment = HorizontalAlignment.Left;
         caption.VerticalAlignment = VerticalAlignment.Center;
+        if (hoverDescription != null)
+        {
+            // CreateText makes labels ignore the mouse, which a hovered one cannot.
+            caption.MouseFilter = Control.MouseFilterEnum.Stop;
+            caption.MouseEntered += () => NHoverTipSet.CreateAndShow(
+                caption,
+                NativeHoverTip.Create(
+                    label, hoverDescription, $"HypergeoCalculator:{label}"),
+                HoverTipAlignment.Right);
+            caption.MouseExited += () => NHoverTipSet.Remove(caption);
+        }
         row.AddChild(caption);
 
         var decrease = CreateButton("−", 36);
