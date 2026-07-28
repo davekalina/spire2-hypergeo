@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -380,16 +381,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
         if (!GodotObject.IsInstanceValid(_screen))
             return;
         _pools = DrawPools.Resolve(_player);
+        // Any card played, drawn or exhausted moves the board the selection was made
+        // against, and drops it.
+        AllCardsSession.SyncToPiles(PileFingerprint());
         // The grid is about to recycle its pooled holders, taking any badge with it.
         _overlay.Clear();
 
-        // Prune against every card on the screen, not the filtered view: search hides
-        // cards, it does not deselect them or take them out of the odds.
-        var present = _pools.Draw
-            .Concat(_pools.Reshuffle)
-            .Concat(_pools.Retained)
-            .ToList();
-        _selectedCards.RemoveWhere(card => !present.Contains(card));
         _grid.SetCards(
             BuildSections().SelectMany(section => section.Cards).ToList(),
             PileType.Draw,
@@ -421,6 +418,21 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     private List<CardModel> Shown(IEnumerable<CardModel> pile) =>
         Sort(pile).Where(Matches).ToList();
+
+    /// <summary>
+    /// Which cards are in which pile, by identity rather than by name, so two copies of
+    /// a card swapping places still counts as a change. Order within a pile is ignored:
+    /// a shuffle moves no card between piles and changes no odds.
+    /// </summary>
+    private string PileFingerprint()
+    {
+        static string Pile(IEnumerable<CardModel> cards) =>
+            string.Join(
+                ',',
+                cards.Select(RuntimeHelpers.GetHashCode).OrderBy(id => id));
+        return string.Join(
+            '|', Pile(_pools.Draw), Pile(_pools.Discard), Pile(_pools.Hand));
+    }
 
     /// <summary>
     /// The Card Library's own search behaviour: match the card's name or the text of

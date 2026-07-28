@@ -179,15 +179,22 @@ that button.
 The game builds a fresh screen every time the pile view opens, so `AllCardsSession`
 holds what would otherwise be discarded on close:
 
-- **Show Odds on Cards** is a display preference and lasts as long as the game does.
-- The **selection**, the **number needed**, and any **hand-picked draw count**
-  belong to one combat and are dropped when a different combat begins.
+- **Show Odds on Cards** and **Rawdog Mode** are display preferences and last as
+  long as the game does.
+- The **calculator's numbers** and any **hand-picked draw count** belong to one
+  combat and are dropped when a different combat begins.
+- The **selection** belongs to one hand. It survives closing and reopening the
+  screen, and nothing else.
 
-Selections hold card instances, so playing or discarding a selected card does not
-deselect it — it is the same card in a different pile. A card that leaves the
-reachable pools entirely is pruned on the next render. A hand-picked draw count is
-kept only while the real next-turn draw is unchanged; once the situation moves,
-the honest number wins.
+A selection is a question about one particular board — these cards, in these
+piles. Playing a card or drawing a hand asks a different question, so the screen
+fingerprints which cards are in which pile and clears the selection the moment
+that changes; carrying the old answer over would report odds for a board that no
+longer exists. Order within a pile is ignored, since a shuffle moves no card
+between piles and changes no odds.
+
+A hand-picked draw count is kept only while the real next-turn draw is unchanged;
+once the situation moves, the honest number wins.
 
 ## Build
 

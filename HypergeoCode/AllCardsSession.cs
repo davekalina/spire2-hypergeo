@@ -10,18 +10,18 @@ namespace Hypergeo.HypergeoCode;
 /// lives here instead, at two different lifetimes:
 ///
 /// <list type="bullet">
-/// <item>The odds overlay is a display preference and lasts as long as the game does.</item>
-/// <item>The selection, how many of it is wanted, and any hand-picked draw count belong
-/// to one combat, and are dropped when a different combat starts.</item>
+/// <item>The odds overlay and Rawdog Mode are display preferences and last as long as
+/// the game does.</item>
+/// <item>The calculator's numbers and any hand-picked draw count belong to one combat,
+/// and are dropped when a different combat starts.</item>
+/// <item>The selection belongs to one hand. It survives closing and reopening the
+/// screen, and nothing else — see <see cref="SyncToPiles" />.</item>
 /// </list>
-///
-/// Selections hold card instances, so they survive cards moving between piles — playing
-/// a card does not deselect it. A card that leaves the reachable pools entirely is
-/// pruned by the screen when it next renders.
 /// </summary>
 internal static class AllCardsSession
 {
     private static object? _combat;
+    private static string? _pileFingerprint;
 
     /// <summary>Whether the per-card odds overlay is switched on. Outlives combat.</summary>
     public static bool ShowOddsOnCards { get; set; }
@@ -81,6 +81,24 @@ internal static class AllCardsSession
         ClearChosenDrawCount();
         // The deck changes between fights, so the calculator reseeds from the new one.
         CalculatorSeeded = false;
+    }
+
+    /// <summary>
+    /// Drop the selection unless the piles are exactly as they were left.
+    ///
+    /// A selection is a question about one particular board — these cards, in these
+    /// piles, with this many left to draw. Playing a card or drawing a hand asks a
+    /// different question, and carrying the old answer over would quietly report odds
+    /// for a board that no longer exists. Closing and reopening the screen changes
+    /// nothing, which is the one case worth remembering.
+    /// </summary>
+    public static void SyncToPiles(string fingerprint)
+    {
+        if (_pileFingerprint == fingerprint)
+            return;
+        _pileFingerprint = fingerprint;
+        SelectedCards.Clear();
+        TargetHits = 1;
     }
 
     public static void SetChosenDrawCount(int chosen, int natural)
