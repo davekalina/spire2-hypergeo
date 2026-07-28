@@ -62,8 +62,19 @@ public static class Hypergeometric
     public static double ExpectedHits(int population, int successes, int draws) =>
         population <= 0 ? 0 : Math.Min(draws, population) * (double)successes / population;
 
-    public static string FormatPercent(double probability) =>
-        probability.ToString("P1", System.Globalization.CultureInfo.InvariantCulture);
+    /// <summary>
+    /// Two decimal places, and never a rounded-off zero: a chance that exists but is
+    /// smaller than the format can show reads as less than the smallest value rather
+    /// than as impossible.
+    /// </summary>
+    public static string FormatPercent(double probability)
+    {
+        const double smallest = 0.0001;
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        return probability > 0 && probability < smallest
+            ? "< " + smallest.ToString("P2", culture)
+            : probability.ToString("P2", culture);
+    }
 
     private static double LogChoose(int n, int k)
     {

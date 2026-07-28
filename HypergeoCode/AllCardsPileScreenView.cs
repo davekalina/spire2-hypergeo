@@ -22,11 +22,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
 {
     private const float CardPadding = 40f;
 
-    private const string ReshuffleMarkerText =
-        "Reshuffle\nDiscard Pile + Cards in Hand\n→";
-
-    private const string RetainedMarkerText =
-        "Retained\nStays in Hand\nNot Reshuffled";
+    private const string ReshuffleHeading = "Reshuffle";
+    private const string RetainedHeading = "Retained";
+    private const string RetainedDescription = "Stays in hand, not reshuffled";
 
     private readonly NCardPileScreen _screen;
     private readonly Player _player;
@@ -37,7 +35,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     private readonly NativeShelf _shelf;
     private readonly CardOddsOverlay _overlay = new();
-    private readonly List<Control> _markers = [];
+    private readonly List<NativeShelf.ShelfMarker> _markers = [];
     private readonly Dictionary<CardIdentity, string> _overlayText = [];
 
     private readonly Button _drawDecrease;
@@ -47,6 +45,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly Button _targetDecrease;
     private readonly Button _targetIncrease;
     private readonly Button _selectionReset;
+    private readonly HBoxContainer _targetRow;
+    private readonly HBoxContainer _resetRow;
     private readonly MegaLabel _targetCountLabel;
     private readonly NativeShelf.ShelfRow _needRow;
     private readonly NativeShelf.ShelfRow _heldRow;
@@ -57,6 +57,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly NSearchBar _searchBar;
     private readonly NLibraryStatTickbox _overlayToggle;
     private readonly NLibraryStatTickbox _rawdogToggle;
+    private readonly NLibraryStatTickbox _handToggle;
     private Button _helpButton = null!;
     private readonly List<Control> _combatModules;
     private List<Control> _calculatorModules = [];
@@ -137,14 +138,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
         targetRow.AddChild(targetCountControl.Root);
         targetRow.AddChild(targetIncreaseControl.Root);
         selection.Body.AddChild(targetRow);
+        _targetRow = targetRow;
         _hintLabel = _shelf.AddCaption(selection.Body, string.Empty);
-
-        var resetRow = NativeShelf.CreateControlRow();
-        var resetControl = _shelf.CreateButton(
-            "Reset", 110, "Clear every selected card.");
-        _selectionReset = resetControl.Input;
-        resetRow.AddChild(resetControl.Root);
-        selection.Body.AddChild(resetRow);
 
         var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
         _queryNote = _shelf.AddNote(result.Body, string.Empty);
@@ -152,11 +147,23 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _heldRow = _shelf.AddRow(result.Body, "Retained");
         _chanceRow = _shelf.AddRow(result.Body, "Chance");
 
+        _resetRow = NativeShelf.CreateControlRow();
+        var resetControl = _shelf.CreateButton(
+            "Reset", 110, "Clear every selected card.");
+        _selectionReset = resetControl.Input;
+        _resetRow.AddChild(resetControl.Root);
+        result.Body.AddChild(_resetRow);
+
         _combatModules = [draw.Root, selection.Root, result.Root];
         AddCalculatorModules();
 
         _overlayToggle = _shelf.AddToggle(
             _shelf.Bottom, "Show Odds on Cards", AllCardsSession.ShowOddsOnCards);
+        _handToggle = _shelf.AddToggle(
+            _shelf.Bottom,
+            "Include Hand in Reshuffle",
+            AllCardsSession.IncludeHandInReshuffle);
+        _handToggle.Toggled += OnIncludeHandToggled;
         _rawdogToggle = _shelf.AddToggle(
             _shelf.Bottom, "Rawdog Mode", AllCardsSession.RawdogMode);
         _rawdogToggle.Toggled += OnRawdogToggled;
@@ -203,8 +210,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _refreshTimer.Timeout -= RefreshPresentation;
         _overlay.Dispose();
         foreach (var marker in _markers)
-            if (GodotObject.IsInstanceValid(marker))
-                marker.QueueFree();
+            if (GodotObject.IsInstanceValid(marker.Root))
+                marker.Root.QueueFree();
         _markers.Clear();
         _shelf.Dispose();
         RestoreRunUiOrder();
@@ -292,6 +299,16 @@ internal sealed class AllCardsPileScreenView : IDisposable
         NativeShelf.SetButtonState(_wanted.Decrease, enabled: wanted > 0);
         NativeShelf.SetButtonState(
             _wanted.Increase, enabled: wanted < Math.Min(successes, sample));
+    }
+
+    /// <summary>
+    /// Whether the hand joins the reshuffle changes the populations themselves, so the
+    /// pools are rebuilt rather than merely redrawn.
+    /// </summary>
+    private void OnIncludeHandToggled(NTickbox tickbox)
+    {
+        AllCardsSession.IncludeHandInReshuffle = tickbox.IsTicked;
+        Render();
     }
 
     private void OnRawdogToggled(NTickbox tickbox)
@@ -560,13 +577,19 @@ internal sealed class AllCardsPileScreenView : IDisposable
     /// </summary>
     private List<GridSection> BuildSections()
     {
-        var sections = new List<GridSection> { new(Shown(_pools.Draw), MarkerText: null) };
+        var sections = new List<GridSection> { new(Shown(_pools.Draw), null, null) };
         var reshuffle = Shown(_pools.Reshuffle);
         if (reshuffle.Count > 0)
-            sections.Add(new(reshuffle, ReshuffleMarkerText));
+            sections.Add(new(
+                reshuffle,
+                ReshuffleHeading,
+                // The hand only joins the reshuffle when the turn is going to end.
+                AllCardsSession.IncludeHandInReshuffle
+                    ? "Discard pile + cards in hand"
+                    : "Discard pile"));
         var retained = Shown(_pools.Retained);
         if (retained.Count > 0)
-            sections.Add(new(retained, RetainedMarkerText));
+            sections.Add(new(retained, RetainedHeading, RetainedDescription));
         return sections;
     }
 
@@ -630,9 +653,13 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         _drawCountLabel.Text = _chosenDrawCount.ToString();
         _targetCountLabel.Text = requiredHits.ToString();
+        // With nothing picked the row is a prompt, not a control: a stepper that can
+        // only read zero of zero is noise.
         _hintLabel.Text = selectedTotal == 0
-            ? "select cards in the grid"
+            ? "Select cards in the grid."
             : $"of {selectedTotal} selected";
+        _targetRow.Visible = selectedTotal > 0;
+        _resetRow.Visible = selectedTotal > 0;
 
         _drawNote.Text = DescribeDrawCount();
         _queryNote.Text = DescribeQuery(selectedTotal, requiredHits);
@@ -796,12 +823,15 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         // A null slot is a section marker; everything else is a card in draw order.
         var slots = new List<CardModel?>();
-        var markerSlots = new List<(int Index, string Text)>();
+        var markerSlots = new List<(int Index, string Heading, string Description)>();
         foreach (var section in sections)
         {
-            if (section.MarkerText != null)
+            if (section.MarkerHeading != null)
             {
-                markerSlots.Add((slots.Count, section.MarkerText));
+                markerSlots.Add((
+                    slots.Count,
+                    section.MarkerHeading,
+                    section.MarkerDescription ?? string.Empty));
                 slots.Add(null);
             }
             slots.AddRange(section.Cards);
@@ -822,15 +852,17 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         for (var index = 0; index < markerSlots.Count; index++)
         {
+            var (slot, heading, description) = markerSlots[index];
             var marker = ResolveMarker(index, scrollContainer, cardSize);
-            marker.GetNode<MegaLabel>("MarkerLabel").Text = markerSlots[index].Text;
-            marker.Visible = true;
-            marker.CustomMinimumSize = cardSize;
-            marker.Size = cardSize;
-            marker.Position = SlotPosition(markerSlots[index].Index) - cardSize * 0.5f;
+            marker.Heading.Text = heading;
+            marker.Description.Text = description;
+            marker.Root.Visible = true;
+            marker.Root.CustomMinimumSize = cardSize;
+            marker.Root.Size = cardSize;
+            marker.Root.Position = SlotPosition(slot) - cardSize * 0.5f;
         }
         for (var index = markerSlots.Count; index < _markers.Count; index++)
-            _markers[index].Visible = false;
+            _markers[index].Root.Visible = false;
 
         var rows = (int)Math.Ceiling(slots.Count / (double)columns);
         var containedHeight =
@@ -841,35 +873,27 @@ internal sealed class AllCardsPileScreenView : IDisposable
                 scrollContainer.Size.X, requiredHeight);
     }
 
-    private Control ResolveMarker(int index, Control parent, Vector2 cardSize)
+    private NativeShelf.ShelfMarker ResolveMarker(
+        int index, Control parent, Vector2 cardSize)
     {
-        if (index < _markers.Count && GodotObject.IsInstanceValid(_markers[index]))
+        if (index < _markers.Count && GodotObject.IsInstanceValid(_markers[index].Root))
             return _markers[index];
 
-        // Leave both z indices at 0. The game's hover tips sit at an absolute
-        // z_index of 0, so any positive value here paints the marker over every
-        // tooltip. At 0 the marker sorts by tree order: below the card holders,
-        // which is right, since its own slot is always empty.
-        var root = new Control
-        {
-            Name = $"HypergeoSectionMarker{index}",
-            CustomMinimumSize = cardSize,
-            Size = cardSize,
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-        };
-        var label = _shelf.CreateText(string.Empty, 17);
-        label.Name = "MarkerLabel";
-        label.Size = cardSize;
-        label.HorizontalAlignment = HorizontalAlignment.Center;
-        label.VerticalAlignment = VerticalAlignment.Center;
-        root.AddChild(label);
-        parent.AddChild(root);
+        // Leave the z index at 0. The game's hover tips sit at an absolute z_index of
+        // 0, so any positive value here paints the marker over every tooltip. At 0 the
+        // marker sorts by tree order: below the card holders, which is right, since its
+        // own slot is always empty.
+        var marker = _shelf.CreateSectionMarker();
+        marker.Root.Name = $"HypergeoSectionMarker{index}";
+        marker.Root.CustomMinimumSize = cardSize;
+        marker.Root.Size = cardSize;
+        parent.AddChild(marker.Root);
 
         if (index < _markers.Count)
-            _markers[index] = root;
+            _markers[index] = marker;
         else
-            _markers.Add(root);
-        return root;
+            _markers.Add(marker);
+        return marker;
     }
 
     private static int IndexOfCard(IReadOnlyList<CardModel?> cards, CardModel target)
@@ -952,5 +976,5 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     /// <summary>A run of cards in the grid, optionally opened by a marker slot.</summary>
     private sealed record GridSection(
-        IReadOnlyList<CardModel> Cards, string? MarkerText);
+        IReadOnlyList<CardModel> Cards, string? MarkerHeading, string? MarkerDescription);
 }

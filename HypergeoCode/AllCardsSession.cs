@@ -39,6 +39,16 @@ internal static class AllCardsSession
     public static bool RawdogMode { get; set; }
 
     /// <summary>
+    /// Whether the hand joins the discard pile in the reshuffle.
+    ///
+    /// True by default, because the usual question is about next turn's hand, and the
+    /// end of the turn does put the hand in the discard. Turn it off to ask about
+    /// drawing more cards during *this* turn, when the hand is staying where it is and
+    /// only the discard would be reshuffled.
+    /// </summary>
+    public static bool IncludeHandInReshuffle { get; set; } = true;
+
+    /// <summary>
     /// The calculator's four numbers, and whether they have been seeded from the deck
     /// yet. Seeding is deferred because the deck size is only known once a screen opens.
     /// </summary>

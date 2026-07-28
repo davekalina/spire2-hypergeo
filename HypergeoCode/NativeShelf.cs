@@ -277,6 +277,52 @@ internal sealed class NativeShelf : IDisposable
         return new ShelfStepper(row, decrease.Input, value.Label, increase.Input);
     }
 
+    /// <summary>
+    /// A card-sized marker separating one run of the grid from the next.
+    ///
+    /// The section name sits on the same bar the shelf uses for its own headings, so a
+    /// separator reads as a heading rather than as loose text over the backdrop, and the
+    /// grid and the shelf are visibly labelled by the same hand. What the section holds,
+    /// and an arrow into it, sit underneath.
+    /// </summary>
+    public ShelfMarker CreateSectionMarker()
+    {
+        var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+
+        var stack = new VBoxContainer
+        {
+            Name = "MarkerStack",
+            Alignment = BoxContainer.AlignmentMode.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        stack.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        stack.AddThemeConstantOverride("separation", 6);
+
+        var heading = CreateDisplay(string.Empty, 0);
+        heading.Root.Name = "MarkerHeading";
+        heading.Root.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        // The display picks a font size from its text, which is empty until the grid
+        // fills it in, so the heading sets its own.
+        heading.Label.AddThemeFontSizeOverride("font_size", 20);
+        stack.AddChild(heading.Root);
+
+        var description = CreateText(string.Empty, 15);
+        description.Name = "MarkerDescription";
+        description.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        description.HorizontalAlignment = HorizontalAlignment.Center;
+        description.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        stack.AddChild(description);
+
+        var arrow = CreateText("→", 24);
+        arrow.Name = "MarkerArrow";
+        arrow.HorizontalAlignment = HorizontalAlignment.Center;
+        arrow.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        stack.AddChild(arrow);
+
+        root.AddChild(stack);
+        return new ShelfMarker(root, heading.Label, description);
+    }
+
     /// <summary>A wrapped note line, for text that will not fit one row.</summary>
     public MegaLabel AddNote(VBoxContainer parent, string text, int fontSize = 15)
     {
@@ -555,6 +601,8 @@ internal sealed class NativeShelf : IDisposable
     }
 
     internal sealed record ShelfModule(VBoxContainer Root, VBoxContainer Body);
+    internal sealed record ShelfMarker(
+        Control Root, MegaLabel Heading, MegaLabel Description);
     internal sealed record ShelfStepper(
         HBoxContainer Root, Button Decrease, MegaLabel Value, Button Increase);
     internal sealed record ShelfRow(HBoxContainer Root, MegaLabel Label, MegaLabel Value);

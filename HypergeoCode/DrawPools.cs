@@ -111,7 +111,12 @@ internal sealed class DrawPools
 
         // ShouldFlush decides what happens at the end of the turn in progress, so it
         // is asked about the turn the player is on right now.
-        var handIsFlushed = Hook.ShouldFlush(state, player);
+        //
+        // Asking about drawing more cards during this turn is the same situation as a
+        // hand that never flushes: it stays where it is, so it is not reshuffled and it
+        // still occupies its space in hand. One flag covers both consequences.
+        var handIsFlushed =
+            AllCardsSession.IncludeHandInReshuffle && Hook.ShouldFlush(state, player);
         var retained = handIsFlushed
             ? hand.Count(card => card.ShouldRetainThisTurn)
             : hand.Count;
