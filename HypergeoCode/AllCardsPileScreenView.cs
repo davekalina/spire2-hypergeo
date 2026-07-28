@@ -451,7 +451,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     }
 
     private static string HelpText =>
-        "Select cards to calculate the chance they are drawn in the next N cards.";
+        "\nSelect cards to calculate the chance they will be drawn in the next N cards.\n\nUse 'W' to show the All Cards view during combat.\n\nOptionally replace the Draw Pile view with this mod's All Cards view via the Mod Settings (only accessible from the main menu).";
         // "on the reshuffle, so they share one section. Retained cards never leave " +
         // "your hand and cannot be drawn.\n\n" +
         // "The draw count is what next turn will deal, after relics, powers, retain, " +
