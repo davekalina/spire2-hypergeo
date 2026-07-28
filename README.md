@@ -182,19 +182,20 @@ same outline the native tickboxes use for selection, plus the scale nudge the
 Card Library's sorter bars give. A stepper with nothing left to give drops out
 of the focus graph rather than stopping travel on a dead control.
 
-Getting out of the grid takes one adjustment. `NCardGrid` wires the leftmost
-card's left neighbour to the *rightmost* card of the same row, so focus wraps
-along the row and never escapes. Clearing that neighbour hands the decision to
-Godot, which searches for the nearest control in that direction and finds the
-shelf. That is exactly what `NCardLibraryGrid` does — it sets its edge
-neighbours to null rather than wrapping — and it is why the Card Library's own
-sidebar is reachable where a pile screen's would not be. The grid rewires itself
-on every rebuild and resize, so the screen reapplies this from its refresh tick.
+Every neighbour is named explicitly, the way the Card Library wires its own
+sidebar. Godot's automatic search cannot be used here: it looks across the whole
+viewport, so a press towards the shelf finds the run's relic inventory sitting
+behind the screen rather than the shelf itself. The shelf's own edges point back
+at their own control, which parks focus rather than letting it escape.
 
-Inside the shelf, navigation is left to Godot's geometric search rather than
-wired by hand. The Card Library wires every neighbour explicitly, but its sidebar
-mixes an eight-icon grid, a four-icon row and five cost boxes; this shelf is a
-tidy stack of centred rows, which the automatic search handles.
+Both ends of the gap between shelf and grid are reapplied from the refresh tick,
+because neither can be wired once and left: the grid rebuilds its holders, and
+which card sits at the left edge changes with the column count. Leaving the grid
+returns to whichever shelf control was last used; leaving the shelf enters the
+grid beside whatever row was being looked at, rather than jumping to the top.
+
+The rows between the search bar and the toggles are swapped wholesale when Rawdog
+Mode is toggled, so the chain is rebuilt then.
 
 ### What the screen remembers
 

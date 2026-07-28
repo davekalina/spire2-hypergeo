@@ -462,6 +462,43 @@ internal sealed class NativeShelf : IDisposable
     }
 
     /// <summary>
+    /// Wire an explicit focus chain down the shelf, row by row.
+    ///
+    /// Godot's automatic search cannot be trusted here: it looks across the whole
+    /// viewport, so a press towards the shelf finds the run's relic inventory sitting
+    /// behind the screen rather than the shelf itself. Naming every neighbour keeps
+    /// focus inside the screen. The edges point back at their own control, which parks
+    /// focus rather than letting it escape; the caller overrides the right edge to hand
+    /// focus back to the card grid.
+    ///
+    /// A neighbour that cannot take focus is not a dead end — Godot walks on in the same
+    /// direction — so a disabled stepper in the chain is simply stepped over.
+    /// </summary>
+    public static void WireFocusRows(IReadOnlyList<IReadOnlyList<Control>> rows)
+    {
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            var above = rows[Math.Max(0, index - 1)];
+            var below = rows[Math.Min(rows.Count - 1, index + 1)];
+            for (var column = 0; column < row.Count; column++)
+            {
+                var control = row[column];
+                control.FocusNeighborLeft = column > 0
+                    ? row[column - 1].GetPath()
+                    : control.GetPath();
+                control.FocusNeighborRight = column < row.Count - 1
+                    ? row[column + 1].GetPath()
+                    : control.GetPath();
+                control.FocusNeighborTop =
+                    above[Math.Min(column, above.Count - 1)].GetPath();
+                control.FocusNeighborBottom =
+                    below[Math.Min(column, below.Count - 1)].GetPath();
+            }
+        }
+    }
+
+    /// <summary>
     /// A disabled button also leaves the focus graph, so controller travel steps over a
     /// stepper that has nothing left to give rather than stopping on it.
     /// </summary>
@@ -479,8 +516,13 @@ internal sealed class NativeShelf : IDisposable
 
     private static void SetFocusOutline(Control visual, bool visible)
     {
-        if (visual.GetNodeOrNull<Control>("NativeSelectedOutline") is { } outline)
-            outline.Visible = visible;
+        if (visual.GetNodeOrNull<Control>("NativeSelectedOutline") is not { } outline)
+            return;
+        // Size it here as well as on resize. Focus can arrive before the control has
+        // ever been resized, and a zero-sized outline is an invisible one.
+        outline.Position = new Vector2(-SelectedOutlineBleed, -SelectedOutlineBleed);
+        outline.Size = visual.Size + Vector2.One * SelectedOutlineBleed * 2f;
+        outline.Visible = visible;
     }
 
     private static void AnimateButton(Control visual, float scale, double seconds)

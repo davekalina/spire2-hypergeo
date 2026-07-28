@@ -54,6 +54,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly MegaLabel _drawNote;
     private readonly MegaLabel _queryNote;
     private readonly NSearchBar _searchBar;
+    private readonly NLibraryStatTickbox _overlayToggle;
+    private readonly NLibraryStatTickbox _rawdogToggle;
+    private Button _helpButton = null!;
     private readonly List<Control> _combatModules;
     private List<Control> _calculatorModules = [];
     private NativeShelf.ShelfStepper _population = null!;
@@ -71,6 +74,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private int _raisedContainerIndex = -1;
     private string? _selectionPercent;
     private string? _selectionCaption;
+    private IReadOnlyList<IReadOnlyList<Control>> _shelfRows = [];
+    private Control? _shelfEntry;
 
     /// <summary>How many of the selection the hand needs. Outlives the screen.</summary>
     private int TargetHits
@@ -142,11 +147,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _combatModules = [draw.Root, selection.Root, result.Root];
         AddCalculatorModules();
 
-        var overlayToggle = _shelf.AddToggle(
+        _overlayToggle = _shelf.AddToggle(
             _shelf.Bottom, "Show Odds on Cards", AllCardsSession.ShowOddsOnCards);
-        var rawdogToggle = _shelf.AddToggle(
+        _rawdogToggle = _shelf.AddToggle(
             _shelf.Bottom, "Rawdog Mode", AllCardsSession.RawdogMode);
-        rawdogToggle.Toggled += OnRawdogToggled;
+        _rawdogToggle.Toggled += OnRawdogToggled;
         AddAboutRow();
 
         _drawDecrease.Pressed += () => ChangeDrawCount(-1);
@@ -154,7 +159,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _drawReset.Pressed += ResetDrawCount;
         _targetDecrease.Pressed += () => ChangeTargetCount(-1);
         _targetIncrease.Pressed += () => ChangeTargetCount(1);
-        overlayToggle.Toggled += OnOverlayToggled;
+        _overlayToggle.Toggled += OnOverlayToggled;
         _searchBar.QueryChanged += OnSearchChanged;
         _refreshTimer.Timeout += RefreshPresentation;
     }
@@ -171,6 +176,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _bottomLabel.Visible = false;
         InsetGridForShelf();
         ApplyShelfMode();
+        TrackShelfFocus();
         _grid.HolderPressed += OnHolderPressed;
         _grid.HolderAltPressed += OnHolderPressed;
         foreach (var pile in Piles())
@@ -288,6 +294,95 @@ internal sealed class AllCardsPileScreenView : IDisposable
             module.Visible = !AllCardsSession.RawdogMode;
         foreach (var module in _calculatorModules)
             module.Visible = AllCardsSession.RawdogMode;
+        WireShelfFocus();
+    }
+
+    /// <summary>
+    /// Name every focus neighbour in the shelf, top to bottom, skipping whichever set of
+    /// modules the current mode has hidden. Rebuilt on a mode change because the rows
+    /// between the search bar and the toggles are swapped wholesale.
+    /// </summary>
+    private void WireShelfFocus()
+    {
+        if (!_shelf.Root.IsInsideTree())
+            return;
+        var rows = new List<IReadOnlyList<Control>>
+        {
+            new[]
+            {
+                _searchBar.GetNode<Control>("TextArea"),
+                _searchBar.GetNode<Control>("ClearButton"),
+            },
+        };
+        if (AllCardsSession.RawdogMode)
+            foreach (var stepper in new[] { _population, _sample, _successes, _wanted })
+                rows.Add(new[] { stepper.Decrease, stepper.Increase });
+        else
+        {
+            rows.Add(new[] { _drawDecrease, _drawReset, _drawIncrease });
+            rows.Add(new[] { _targetDecrease, _targetIncrease });
+        }
+        rows.Add(new Control[] { _overlayToggle });
+        rows.Add(new Control[] { _rawdogToggle });
+        rows.Add(new Control[] { _helpButton });
+
+        NativeShelf.WireFocusRows(rows);
+        _shelfRows = rows;
+    }
+
+    /// <summary>
+    /// Remember which shelf control focus was last on, so returning from the grid lands
+    /// there. Every shelf control is wired once; the mode switch only reorders them.
+    /// </summary>
+    private void TrackShelfFocus()
+    {
+        foreach (var control in new Control[]
+                 {
+                     _searchBar.GetNode<Control>("TextArea"),
+                     _searchBar.GetNode<Control>("ClearButton"),
+                     _drawDecrease, _drawReset, _drawIncrease,
+                     _targetDecrease, _targetIncrease,
+                     _population.Decrease, _population.Increase,
+                     _sample.Decrease, _sample.Increase,
+                     _successes.Decrease, _successes.Increase,
+                     _wanted.Decrease, _wanted.Increase,
+                     _overlayToggle, _rawdogToggle, _helpButton,
+                 })
+        {
+            var tracked = control;
+            tracked.FocusEntered += () => _shelfEntry = tracked;
+        }
+    }
+
+    /// <summary>
+    /// Hand focus across the gap between the shelf and the grid, in both directions.
+    ///
+    /// Neither side can be wired once and left: the grid rebuilds its holders, and which
+    /// card sits at the left edge changes with the column count, so both ends are
+    /// reapplied from the refresh tick.
+    /// </summary>
+    private void WireGridSeam(IReadOnlyList<NCardHolder> leftEdge)
+    {
+        if (leftEdge.Count == 0 || _shelfRows.Count == 0)
+            return;
+        // Into the shelf: whichever control was last used, so leaving and returning
+        // lands where it left off rather than at the top every time.
+        var entry = GodotObject.IsInstanceValid(_shelfEntry)
+            ? _shelfEntry!
+            : _shelfRows[0][0];
+        foreach (var holder in leftEdge)
+            holder.FocusNeighborLeft = entry.GetPath();
+        // Out of the shelf: the nearest left-edge card to each row, by height, so the
+        // grid is entered beside whatever was being looked at.
+        foreach (var row in _shelfRows)
+        {
+            var last = row[^1];
+            var centre = last.GlobalPosition.Y + last.Size.Y * 0.5f;
+            var nearest = leftEdge
+                .OrderBy(holder => Math.Abs(holder.GlobalPosition.Y - centre))
+                .First();
+            last.FocusNeighborRight = nearest.GetPath();
+        }
     }
 
     /// <summary>
@@ -306,6 +401,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         var help = _shelf.CreateButton("?", 36, HelpText, MainFile.ModName);
         help.Root.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        _helpButton = help.Input;
         row.AddChild(help.Root);
         _shelf.Bottom.AddChild(row);
     }
@@ -647,6 +743,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             slots.AddRange(section.Cards);
         }
 
+        var leftEdge = new List<NCardHolder>();
         foreach (var holder in _grid.CurrentlyDisplayedCardHolders)
         {
             if (holder.CardModel is not { } card)
@@ -655,8 +752,10 @@ internal sealed class AllCardsPileScreenView : IDisposable
             if (slot < 0)
                 continue;
             holder.Position = SlotPosition(slot);
-            OpenLeftEdgeToShelf(holder, slot % columns == 0);
+            if (slot % columns == 0)
+                leftEdge.Add(holder);
         }
+        WireGridSeam(leftEdge);
 
         for (var index = 0; index < markerSlots.Count; index++)
         {
@@ -677,24 +776,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
         if (scrollContainer.Size.Y < requiredHeight)
             scrollContainer.Size = new Vector2(
                 scrollContainer.Size.X, requiredHeight);
-    }
-
-    /// <summary>
-    /// Let a controller leave the grid on its left edge and land on the shelf.
-    ///
-    /// NCardGrid wires the leftmost card's left neighbour to the rightmost card of the
-    /// same row, so focus wraps along the row and never escapes. Clearing that neighbour
-    /// hands the decision to Godot, which searches for the nearest control in that
-    /// direction and finds the shelf — the same thing NCardLibraryGrid does, and why the
-    /// Card Library's own sidebar is reachable. The grid rewires itself on every rebuild,
-    /// so this is reapplied from the refresh tick.
-    /// </summary>
-    private static void OpenLeftEdgeToShelf(NCardHolder holder, bool isLeftEdge)
-    {
-        // Only ever clear. A holder that stops being an edge gets a correct neighbour
-        // from the grid's own rewiring, which runs on every rebuild and every resize.
-        if (isLeftEdge && !holder.FocusNeighborLeft.IsEmpty)
-            holder.FocusNeighborLeft = new NodePath();
     }
 
     private Control ResolveMarker(int index, Control parent, Vector2 cardSize)
