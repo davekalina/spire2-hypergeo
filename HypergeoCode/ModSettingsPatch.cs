@@ -1,4 +1,3 @@
-using System.Reflection;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Helpers;
@@ -73,7 +72,7 @@ internal static class ModSettingsPatch
         takeover.CustomMinimumSize = new Vector2(0, 42);
         takeover.Ready += () =>
         {
-            takeover.SetLabel("All Cards on the Draw Pile button");
+            takeover.SetLabel("Override Draw Pile button");
             takeover.IsTicked = HypergeoSettings.DrawPileTakeover;
         };
         takeover.Toggled += OnDrawPileTakeoverToggled;
@@ -84,25 +83,10 @@ internal static class ModSettingsPatch
     }
 
     /// <summary>
-    /// Write the choice through to the live controller map as well as to disk, so it
-    /// takes effect without a restart. The map the game rebuilds on its next load runs
-    /// through the same helper, so the two cannot disagree.
+    /// Nothing to apply beyond writing it down: the override is read at the moment the
+    /// Draw Pile button acts, not baked into a binding, so it takes effect immediately
+    /// and leaves every input map untouched.
     /// </summary>
-    private static void OnDrawPileTakeoverToggled(NTickbox tickbox)
-    {
+    private static void OnDrawPileTakeoverToggled(NTickbox tickbox) =>
         HypergeoSettings.DrawPileTakeover = tickbox.IsTicked;
-        var manager = NInputManager.Instance;
-        if (manager == null)
-            return;
-        var field = typeof(NInputManager).GetField(
-            "_controllerInputMap", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (field?.GetValue(manager) is not Dictionary<StringName, StringName> map)
-            return;
-        if (!tickbox.IsTicked)
-            // Give the draw pile its button back; the game's defaults are the record of
-            // where it belongs.
-            map[MegaCrit.Sts2.Core.ControllerInput.MegaInput.viewDrawPile] =
-                AllCardsHotkey.TakeoverButton;
-        AllCardsHotkey.ApplyDrawPileTakeover(map);
-    }
 }

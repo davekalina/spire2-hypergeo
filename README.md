@@ -159,14 +159,16 @@ cannot add to, and while Steam Input is active the game disables its own
 controller rebinding entirely — `ShouldAllowControllerRebinding` returns false.
 That is why a binding set in game appears to be ignored.
 
-The last hop is the game's own dictionary, though, and it is reachable. So
-**Settings → Mod Settings → Hypergeometric Draw Odds** offers **All Cards on the
-Draw Pile button**, off by default. Turning it on points the Draw Pile button at
-this screen instead, which works whether or not Steam Input is in the picture.
-The draw pile gives the button up rather than sharing it — both bindings would
-otherwise fire at once — which is a fair trade only because the All Cards screen
-shows the draw pile and then some. The setting applies immediately and is
-remembered in `user://hypergeo_settings.cfg`.
+So instead of chasing bindings, **Settings → Mod Settings → Hypergeometric Draw
+Odds** offers **Override Draw Pile button**, off by default. It changes what the
+Draw Pile button *does* rather than what it is bound to: every route into that
+button — a keyboard key, a controller button, a Steam Input action, or a mouse
+click — arrives at one method, so overriding there covers all of them at once
+and needs no input map rewritten. Every binding is left alone and Settings keeps
+showing them; only the destination changes. It is a fair trade only because the
+All Cards screen shows the draw pile and then some, which is why it is opt-in.
+The setting applies immediately and is remembered in
+`user://hypergeo_settings.cfg`.
 
 Without that setting the shortcut starts unbound on a controller and can be
 bound to any button from Settings → Input, at the cost of whatever action holds

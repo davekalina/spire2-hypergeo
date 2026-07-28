@@ -7,9 +7,21 @@ namespace Hypergeo.HypergeoCode;
 
 internal static class AllCardsPileScreenCoordinator
 {
+    /// <summary>Names the screen so an open one can be recognised as ours.</summary>
+    public const string ScreenName = "NCardPileScreen-AllCards";
+
     private static readonly Dictionary<NCardPileScreen, AllCardsPileScreenView> Views = [];
     private static Player? _openingPlayer;
     private static bool _isOpening;
+
+    public static void OpenForLocalPlayer()
+    {
+        var players = MegaCrit.Sts2.Core.Combat.CombatManager.Instance
+            .DebugOnlyGetState()?.Players;
+        var player = players == null ? null : LocalPlayerResolver.Resolve(players);
+        if (player?.PlayerCombatState != null)
+            Open(player);
+    }
 
     public static void Open(Player player)
     {

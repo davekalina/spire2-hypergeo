@@ -1,6 +1,5 @@
 using System.Reflection;
 using Godot;
-using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.Settings;
 
@@ -37,40 +36,6 @@ internal static class AllCardsHotkey
     /// select cards; W is free and sits in the same cluster as the pile keys.
     /// </summary>
     public const Key DefaultKey = Key.W;
-
-    /// <summary>
-    /// The controller button the shortcut takes over when the player asks for it in
-    /// Mod Settings. This is the game's Draw Pile button, which the All Cards screen
-    /// supersedes — it shows the draw pile and then some.
-    /// </summary>
-    public static readonly StringName TakeoverButton = Controller.leftTrigger;
-
-    /// <summary>
-    /// Point the Draw Pile button at this shortcut, if the player has asked for that.
-    ///
-    /// Under Steam Input the physical binding belongs to Steam and the game disables
-    /// its own controller rebinding, but Steam only owns the first hop: a press becomes
-    /// a Steam action, which the game turns into a <c>Controller.*</c> input, which
-    /// <em>this</em> map turns into a game action. That last hop is the game's own, so
-    /// redirecting it works whether or not Steam is in the picture.
-    ///
-    /// Both bindings would otherwise fire together, so the draw pile gives its button
-    /// up rather than sharing it.
-    /// </summary>
-    public static void ApplyDrawPileTakeover(Dictionary<StringName, StringName> map)
-    {
-        if (!HypergeoSettings.DrawPileTakeover)
-        {
-            map.Remove(Action);
-            return;
-        }
-        foreach (var bound in map
-                     .Where(binding => binding.Value == TakeoverButton)
-                     .Select(binding => binding.Key)
-                     .ToList())
-            map.Remove(bound);
-        map[Action] = TakeoverButton;
-    }
 
     public static void Install()
     {

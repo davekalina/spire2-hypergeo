@@ -160,7 +160,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     public void Attach()
     {
-        _screen.Name = "NCardPileScreen-AllCards";
+        _screen.Name = AllCardsPileScreenCoordinator.ScreenName;
         RaiseAboveRunUi();
         // Behind the back button, exactly where the Card Library puts its sidebar.
         _screen.AddChild(_shelf.Root);
