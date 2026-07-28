@@ -3,7 +3,7 @@
   "name": "Hypergeometric Draw Odds",
   "author": "realtruegravy",
   "description": "Shows hypergeometric odds for drawing individual or selected cards in the next hand.",
-  "version": "v0.8.0",
+  "version": "v0.8.1",
   "min_game_version": "0.109.0",
   "has_pck": false,
   "has_dll": true,
