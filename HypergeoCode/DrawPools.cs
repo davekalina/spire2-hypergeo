@@ -34,10 +34,22 @@ internal sealed class DrawPools
         Hand = hand;
         NaturalDrawCount = nextDraw.Count;
         DrawModifiers = nextDraw.Modifiers;
+
+        // Two different reasons a card in hand cannot be drawn, kept apart because they
+        // are worth telling apart: an effect is holding it, or the player is asking
+        // about this turn and so nothing in hand is going anywhere.
         Retained = hand.Where(IsRetained).ToList();
-        Reshuffle = discard
-            .Concat(hand.Where(card => !IsRetained(card)))
-            .ToList();
+        var rest = hand.Where(card => !IsRetained(card)).ToList();
+        if (AllCardsSession.IncludeHandInReshuffle)
+        {
+            Reshuffle = discard.Concat(rest).ToList();
+            HandOutsideReshuffle = [];
+        }
+        else
+        {
+            Reshuffle = discard;
+            HandOutsideReshuffle = rest;
+        }
     }
 
     /// <summary>Cards in the draw pile. Drawn before anything else.</summary>
@@ -53,10 +65,19 @@ internal sealed class DrawPools
     public IReadOnlyList<CardModel> Reshuffle { get; }
 
     /// <summary>
-    /// Hand cards retain keeps out of the reshuffle. They only rejoin the deck once
+    /// Hand cards an effect keeps out of the reshuffle. They only rejoin the deck once
     /// they are played and leave the hand, so no upcoming draw can reach them.
     /// </summary>
     public IReadOnlyList<CardModel> Retained { get; }
+
+    /// <summary>
+    /// Hand cards left out of the reshuffle because the question is about drawing during
+    /// this turn, when the hand is staying where it is. Empty otherwise.
+    /// </summary>
+    public IReadOnlyList<CardModel> HandOutsideReshuffle { get; }
+
+    /// <summary>Everything in hand that no upcoming draw can reach, for either reason.</summary>
+    public int HeldInHandCount => Retained.Count + HandOutsideReshuffle.Count;
 
     /// <summary>Next-hand draw after modifiers, retain, and hand capacity.</summary>
     public int NaturalDrawCount { get; }
@@ -109,18 +130,20 @@ internal sealed class DrawPools
             return new DrawPools(
                 draw, discard, hand, handIsFlushed: true, new NextHandDraw(0, []));
 
-        // ShouldFlush decides what happens at the end of the turn in progress, so it
-        // is asked about the turn the player is on right now.
-        //
-        // Asking about drawing more cards during this turn is the same situation as a
-        // hand that never flushes: it stays where it is, so it is not reshuffled and it
-        // still occupies its space in hand. One flag covers both consequences.
-        var handIsFlushed =
-            AllCardsSession.IncludeHandInReshuffle && Hook.ShouldFlush(state, player);
-        var retained = handIsFlushed
-            ? hand.Count(card => card.ShouldRetainThisTurn)
+        // ShouldFlush decides what happens at the end of the turn in progress, so it is
+        // asked about the turn the player is on right now. It is the game's answer
+        // alone — whether the player wants the hand counted is a separate question.
+        var handIsFlushed = Hook.ShouldFlush(state, player);
+
+        // Cards that keep their place in hand through the draw, and so take up the room
+        // the next hand would have filled. Asking about drawing during this turn means
+        // the whole hand stays, not just what an effect is holding.
+        var heldInHand = AllCardsSession.IncludeHandInReshuffle
+            ? handIsFlushed
+                ? hand.Count(card => card.ShouldRetainThisTurn)
+                : hand.Count
             : hand.Count;
-        var nextDraw = NextHandDraw.Resolve(state, player, retained);
+        var nextDraw = NextHandDraw.Resolve(state, player, heldInHand);
         return new DrawPools(draw, discard, hand, handIsFlushed, nextDraw);
     }
 

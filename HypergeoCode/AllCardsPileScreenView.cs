@@ -22,10 +22,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
 {
     private const float CardPadding = 40f;
 
-    private const string ReshuffleHeading = "Reshuffle";
-    private const string RetainedHeading = "Retained";
-    private const string RetainedDescription = "Stays in hand, not reshuffled";
-
     private readonly NCardPileScreen _screen;
     private readonly Player _player;
     private readonly NCardGrid _grid;
@@ -144,7 +140,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
         _queryNote = _shelf.AddNote(result.Body, string.Empty);
         _needRow = _shelf.AddRow(result.Body, "Need");
-        _heldRow = _shelf.AddRow(result.Body, "Retained");
+        _heldRow = _shelf.AddRow(result.Body, "In hand");
         _chanceRow = _shelf.AddRow(result.Body, "Chance");
 
         _resetRow = NativeShelf.CreateControlRow();
@@ -582,14 +578,21 @@ internal sealed class AllCardsPileScreenView : IDisposable
         if (reshuffle.Count > 0)
             sections.Add(new(
                 reshuffle,
-                ReshuffleHeading,
+                "Reshuffle",
                 // The hand only joins the reshuffle when the turn is going to end.
                 AllCardsSession.IncludeHandInReshuffle
-                    ? "Discard pile + cards in hand"
-                    : "Discard pile"));
+                    ? "Discard Pile + Cards in Hand"
+                    : "Discard Pile"));
+        var inHand = Shown(_pools.HandOutsideReshuffle);
+        if (inHand.Count > 0)
+            sections.Add(new(
+                inHand,
+                "In Hand",
+                "Staying in hand while you draw this turn, so not reshuffled"));
         var retained = Shown(_pools.Retained);
         if (retained.Count > 0)
-            sections.Add(new(retained, RetainedHeading, RetainedDescription));
+            sections.Add(new(
+                retained, "Retained", "Stays in hand, not reshuffled"));
         return sections;
     }
 
@@ -638,7 +641,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private void UpdateAnalysis()
     {
         var selectedTotal = _selectedCards.Count;
-        var retainedSelected = _selectedCards.Count(_pools.Retained.Contains);
+        // Counts both reasons a selected card cannot be drawn: an effect holding it,
+        // and a hand that is staying put while drawing this turn.
+        var retainedSelected = _selectedCards.Count(
+            card => _pools.Retained.Contains(card) ||
+                    _pools.HandOutsideReshuffle.Contains(card));
         // Zero is a question, not an empty state: the chance of drawing none of them.
         var requiredHits = selectedTotal == 0
             ? 0
@@ -855,7 +862,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             var (slot, heading, description) = markerSlots[index];
             var marker = ResolveMarker(index, scrollContainer, cardSize);
             marker.Heading.Text = heading;
-            marker.Description.Text = description;
+            marker.Description = description;
             marker.Root.Visible = true;
             marker.Root.CustomMinimumSize = cardSize;
             marker.Root.Size = cardSize;

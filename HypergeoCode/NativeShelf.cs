@@ -29,6 +29,9 @@ internal sealed class NativeShelf : IDisposable
     private const float BodyIndent = 8f;
     private const float SelectedOutlineBleed = 5f;
 
+    /// <summary>Sized for the longest toggle label, so none of them has to shrink.</summary>
+    private const int ToggleFontSize = 17;
+
     private static readonly Color PanelColor = new(0.182f, 0.2604f, 0.28f, 0.501961f);
     private static readonly Color ShadowColor = new(0.2346f, 0.325947f, 0.34f, 1f);
     private static readonly Color HeaderColor = new(0.937255f, 0.784314f, 0.317647f, 1f);
@@ -296,7 +299,6 @@ internal sealed class NativeShelf : IDisposable
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         stack.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        stack.AddThemeConstantOverride("separation", 6);
 
         var heading = CreateDisplay(string.Empty, 0);
         heading.Root.Name = "MarkerHeading";
@@ -305,22 +307,21 @@ internal sealed class NativeShelf : IDisposable
         // fills it in, so the heading sets its own.
         heading.Label.AddThemeFontSizeOverride("font_size", 20);
         stack.AddChild(heading.Root);
-
-        var description = CreateText(string.Empty, 15);
-        description.Name = "MarkerDescription";
-        description.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        description.HorizontalAlignment = HorizontalAlignment.Center;
-        description.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        stack.AddChild(description);
-
-        var arrow = CreateText("→", 24);
-        arrow.Name = "MarkerArrow";
-        arrow.HorizontalAlignment = HorizontalAlignment.Center;
-        arrow.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        stack.AddChild(arrow);
-
         root.AddChild(stack);
-        return new ShelfMarker(root, heading.Label, description);
+
+        var marker = new ShelfMarker { Root = root, Heading = heading.Label };
+        // Pass, not Stop: the marker sits in the card grid, which reads mouse events of
+        // its own to drag-scroll, and swallowing them would make it a dead patch.
+        heading.Root.MouseFilter = Control.MouseFilterEnum.Pass;
+        heading.Root.MouseEntered += () => NHoverTipSet.CreateAndShow(
+            heading.Root,
+            NativeHoverTip.Create(
+                marker.Heading.Text,
+                marker.Description,
+                $"HypergeoSection:{marker.Heading.Text}"),
+            HoverTipAlignment.Right);
+        heading.Root.MouseExited += () => NHoverTipSet.Remove(heading.Root);
+        return marker;
     }
 
     /// <summary>A wrapped note line, for text that will not fit one row.</summary>
@@ -355,6 +356,11 @@ internal sealed class NativeShelf : IDisposable
         // SetLabel needs the node references _Ready builds, so wait for them.
         tickbox.Ready += () =>
         {
+            // The native label shrinks whatever will not fit, which leaves toggles at
+            // different sizes beside each other. Capping the size low enough for the
+            // longest of them means none has to shrink and they all match.
+            if (tickbox.GetNodeOrNull<MegaLabel>("Label") is { } text)
+                text.MaxFontSize = ToggleFontSize;
             tickbox.SetLabel(label);
             tickbox.IsTicked = ticked;
         };
@@ -601,8 +607,16 @@ internal sealed class NativeShelf : IDisposable
     }
 
     internal sealed record ShelfModule(VBoxContainer Root, VBoxContainer Body);
-    internal sealed record ShelfMarker(
-        Control Root, MegaLabel Heading, MegaLabel Description);
+    /// <summary>
+    /// A grid separator. The description is read when the marker is hovered rather than
+    /// captured up front, so a section can change what it holds without rebuilding.
+    /// </summary>
+    internal sealed class ShelfMarker
+    {
+        public required Control Root { get; init; }
+        public required MegaLabel Heading { get; init; }
+        public string Description { get; set; } = string.Empty;
+    }
     internal sealed record ShelfStepper(
         HBoxContainer Root, Button Decrease, MegaLabel Value, Button Increase);
     internal sealed record ShelfRow(HBoxContainer Root, MegaLabel Label, MegaLabel Value);
