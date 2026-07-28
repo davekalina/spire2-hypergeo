@@ -30,7 +30,7 @@ internal static class AllCardsSession
     public static HashSet<CardModel> SelectedCards { get; } = [];
 
     /// <summary>How many of the selection the hand needs.</summary>
-    public static int TargetHits { get; set; } = 1;
+    public static int TargetHits { get; set; }
 
     /// <summary>
     /// Whether the shelf shows the plain hypergeometric calculator instead of the
@@ -77,7 +77,7 @@ internal static class AllCardsSession
             return;
         _combat = combat;
         SelectedCards.Clear();
-        TargetHits = 1;
+        TargetHits = 0;
         ClearChosenDrawCount();
         // The deck changes between fights, so the calculator reseeds from the new one.
         CalculatorSeeded = false;
@@ -98,7 +98,7 @@ internal static class AllCardsSession
             return;
         _pileFingerprint = fingerprint;
         SelectedCards.Clear();
-        TargetHits = 1;
+        TargetHits = 0;
     }
 
     public static void SetChosenDrawCount(int chosen, int natural)

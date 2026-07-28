@@ -78,6 +78,16 @@ internal sealed class DrawPools
             Reshuffle.Count, Reshuffle.Count(isSelected),
             cardsDrawn);
 
+    /// <summary>
+    /// Chance the next hand contains none of the selected cards.
+    ///
+    /// Not the same question as "at least zero", which is always true. This is the
+    /// complement of drawing any of them, and is worth asking of a card you would
+    /// rather not see.
+    /// </summary>
+    public double ChanceOfNone(Func<CardModel, bool> isSelected, int cardsDrawn) =>
+        1 - ChanceOfAny(isSelected, cardsDrawn);
+
     /// <summary>Chance the next hand contains at least <paramref name="requiredHits"/> selected cards.</summary>
     public double ChanceOfAtLeast(
         Func<CardModel, bool> isSelected, int cardsDrawn, int requiredHits) =>

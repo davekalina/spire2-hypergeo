@@ -46,6 +46,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly MegaLabel _drawCountLabel;
     private readonly Button _targetDecrease;
     private readonly Button _targetIncrease;
+    private readonly Button _selectionReset;
     private readonly MegaLabel _targetCountLabel;
     private readonly NativeShelf.ShelfRow _needRow;
     private readonly NativeShelf.ShelfRow _heldRow;
@@ -124,7 +125,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _shelf.AddCaption(draw.Body, "cards next hand");
         _drawNote = _shelf.AddNote(draw.Body, string.Empty, 13);
 
-        var selection = _shelf.AddModule(_shelf.Top, "Selection");
+        var selection = _shelf.AddModule(_shelf.Top, "Hits");
         var targetRow = NativeShelf.CreateControlRow();
         var targetDecreaseControl = _shelf.CreateButton("−", 48);
         var targetCountControl = _shelf.CreateDisplay(string.Empty, 52);
@@ -137,6 +138,13 @@ internal sealed class AllCardsPileScreenView : IDisposable
         targetRow.AddChild(targetIncreaseControl.Root);
         selection.Body.AddChild(targetRow);
         _hintLabel = _shelf.AddCaption(selection.Body, string.Empty);
+
+        var resetRow = NativeShelf.CreateControlRow();
+        var resetControl = _shelf.CreateButton(
+            "Reset", 110, "Clear every selected card.");
+        _selectionReset = resetControl.Input;
+        resetRow.AddChild(resetControl.Root);
+        selection.Body.AddChild(resetRow);
 
         var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
         _queryNote = _shelf.AddNote(result.Body, string.Empty);
@@ -159,6 +167,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _drawReset.Pressed += ResetDrawCount;
         _targetDecrease.Pressed += () => ChangeTargetCount(-1);
         _targetIncrease.Pressed += () => ChangeTargetCount(1);
+        _selectionReset.Pressed += ClearSelection;
         _overlayToggle.Toggled += OnOverlayToggled;
         _searchBar.QueryChanged += OnSearchChanged;
         _refreshTimer.Timeout += RefreshPresentation;
@@ -325,6 +334,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         {
             rows.Add(new[] { _drawDecrease, _drawReset, _drawIncrease });
             rows.Add(new[] { _targetDecrease, _targetIncrease });
+            rows.Add(new Control[] { _selectionReset });
         }
         rows.Add(new Control[] { _overlayToggle });
         rows.Add(new Control[] { _rawdogToggle });
@@ -345,7 +355,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
                      _searchBar.GetNode<Control>("TextArea"),
                      _searchBar.GetNode<Control>("ClearButton"),
                      _drawDecrease, _drawReset, _drawIncrease,
-                     _targetDecrease, _targetIncrease,
+                     _targetDecrease, _targetIncrease, _selectionReset,
                      _population.Decrease, _population.Increase,
                      _sample.Decrease, _sample.Increase,
                      _successes.Decrease, _successes.Increase,
@@ -606,13 +616,17 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         var selectedTotal = _selectedCards.Count;
         var retainedSelected = _selectedCards.Count(_pools.Retained.Contains);
+        // Zero is a question, not an empty state: the chance of drawing none of them.
         var requiredHits = selectedTotal == 0
-            ? 1
-            : Math.Clamp(TargetHits, 1, selectedTotal);
+            ? 0
+            : Math.Clamp(TargetHits, 0, selectedTotal);
         TargetHits = requiredHits;
         var chance = selectedTotal == 0
             ? 0
-            : _pools.ChanceOfAtLeast(_selectedCards.Contains, _chosenDrawCount, requiredHits);
+            : requiredHits == 0
+                ? _pools.ChanceOfNone(_selectedCards.Contains, _chosenDrawCount)
+                : _pools.ChanceOfAtLeast(
+                    _selectedCards.Contains, _chosenDrawCount, requiredHits);
 
         _drawCountLabel.Text = _chosenDrawCount.ToString();
         _targetCountLabel.Text = requiredHits.ToString();
@@ -635,9 +649,10 @@ internal sealed class AllCardsPileScreenView : IDisposable
             _drawIncrease, enabled: _chosenDrawCount < _pools.ReachableCount);
         NativeShelf.SetButtonState(_drawReset, enabled: true);
         NativeShelf.SetButtonState(
-            _targetDecrease, enabled: selectedTotal > 0 && requiredHits > 1);
+            _targetDecrease, enabled: selectedTotal > 0 && requiredHits > 0);
         NativeShelf.SetButtonState(
             _targetIncrease, enabled: selectedTotal > 0 && requiredHits < selectedTotal);
+        NativeShelf.SetButtonState(_selectionReset, enabled: selectedTotal > 0);
 
         UpdateCalculator();
         RebuildOverlayText(selectedTotal, requiredHits, chance);
@@ -663,25 +678,26 @@ internal sealed class AllCardsPileScreenView : IDisposable
     /// </summary>
     private string DescribeQuery(int selectedTotal, int requiredHits)
     {
+        // Nothing selected needs no sentence — the row above already says to pick cards,
+        // and the blank chance says the rest.
         if (selectedTotal == 0)
-            return "Select cards in the grid.";
+            return string.Empty;
 
-        const int maxNames = 3;
+        // Every name, however many. A selection is worth naming in full; the note wraps.
         var names = _selectedCards
             .OrderBy(card => card.Rarity)
             .ThenBy(card => card.Title, StringComparer.CurrentCulture)
             .Select(card => card.Title)
             .Distinct()
             .ToList();
-        var shown = names.Take(maxNames).ToList();
         var wantsEveryOne = requiredHits == selectedTotal;
-        var joiner = wantsEveryOne ? " and " : " or ";
-        var listed = shown.Count == 1
-            ? shown[0]
-            : string.Join(", ", shown.Take(shown.Count - 1)) + joiner + shown[^1];
-        if (names.Count > shown.Count)
-            listed += $" +{names.Count - shown.Count} more";
+        var joiner = requiredHits == 0 || wantsEveryOne ? " and " : " or ";
+        var listed = names.Count == 1
+            ? names[0]
+            : string.Join(", ", names.Take(names.Count - 1)) + joiner + names[^1];
 
+        if (requiredHits == 0)
+            return $"Chance to draw none of {listed}:";
         return requiredHits > 1 && !wantsEveryOne
             ? $"Chance to draw {requiredHits} of {listed}:"
             : $"Chance to draw {listed}:";
@@ -868,8 +884,20 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         if (holder.CardModel is not { } card)
             return;
+        var wasEmpty = _selectedCards.Count == 0;
         if (!_selectedCards.Add(card))
             _selectedCards.Remove(card);
+        // Opening a selection asks the ordinary question first. Zero stays available,
+        // but only once it has been chosen deliberately.
+        if (wasEmpty && _selectedCards.Count > 0)
+            TargetHits = 1;
+        UpdateAnalysis();
+    }
+
+    private void ClearSelection()
+    {
+        _selectedCards.Clear();
+        TargetHits = 0;
         UpdateAnalysis();
     }
 
@@ -905,7 +933,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         if (_selectedCards.Count == 0)
             return;
-        TargetHits = Math.Clamp(TargetHits + delta, 1, _selectedCards.Count);
+        TargetHits = Math.Clamp(TargetHits + delta, 0, _selectedCards.Count);
         UpdateAnalysis();
     }
 
