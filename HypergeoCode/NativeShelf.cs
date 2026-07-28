@@ -325,12 +325,28 @@ internal sealed class NativeShelf : IDisposable
         var input = new Button
         {
             Flat = true,
-            FocusMode = Control.FocusModeEnum.None,
+            // Focusable, so a controller can reach the shelf at all. The game's own
+            // focus travel is Godot's, so joining the focus graph is the whole trick.
+            FocusMode = Control.FocusModeEnum.All,
             MouseFilter = Control.MouseFilterEnum.Stop,
         };
         input.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        // The default focus box is a grey rectangle that looks nothing like the game.
+        input.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
         input.MouseEntered += () => AnimateButton(display.Visual, 1.04f, 0.06);
         input.MouseExited += () => AnimateButton(display.Visual, 1f, 0.16);
+        // Focus wears the same outline the native tickboxes use for selection, which
+        // is otherwise unused now, plus the scale nudge NCardViewSortButton gives.
+        input.FocusEntered += () =>
+        {
+            SetFocusOutline(display.Visual, visible: true);
+            AnimateButton(display.Visual, 1.05f, 0.06);
+        };
+        input.FocusExited += () =>
+        {
+            SetFocusOutline(display.Visual, visible: false);
+            AnimateButton(display.Visual, 1f, 0.16);
+        };
         if (hoverDescription != null)
         {
             input.MouseEntered += () => NHoverTipSet.CreateAndShow(
@@ -445,18 +461,26 @@ internal sealed class NativeShelf : IDisposable
         return label;
     }
 
-    public static void SetButtonState(Button input, bool enabled, bool highlighted = false)
+    /// <summary>
+    /// A disabled button also leaves the focus graph, so controller travel steps over a
+    /// stepper that has nothing left to give rather than stopping on it.
+    /// </summary>
+    public static void SetButtonState(Button input, bool enabled)
     {
         input.Disabled = !enabled;
-        if (input.GetParent()?.GetNodeOrNull<CanvasItem>("NativeVisual") is not { } visual)
-            return;
-        visual.SelfModulate = highlighted
-            ? Colors.White
-            : enabled
+        input.FocusMode = enabled
+            ? Control.FocusModeEnum.All
+            : Control.FocusModeEnum.None;
+        if (input.GetParent()?.GetNodeOrNull<CanvasItem>("NativeVisual") is { } visual)
+            visual.SelfModulate = enabled
                 ? new Color(0.86f, 0.86f, 0.86f, 1)
                 : new Color(0.52f, 0.52f, 0.52f, 0.85f);
-        if (visual.GetNodeOrNull<Control>("NativeSelectedOutline") is { } selectedOutline)
-            selectedOutline.Visible = highlighted;
+    }
+
+    private static void SetFocusOutline(Control visual, bool visible)
+    {
+        if (visual.GetNodeOrNull<Control>("NativeSelectedOutline") is { } outline)
+            outline.Visible = visible;
     }
 
     private static void AnimateButton(Control visual, float scale, double seconds)

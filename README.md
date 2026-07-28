@@ -174,6 +174,28 @@ Without that setting the shortcut starts unbound on a controller and can be
 bound to any button from Settings → Input, at the cost of whatever action holds
 that button.
 
+### Controller navigation
+
+The shelf's controls are focusable, so a controller can reach them: press left
+from the leftmost column of cards and focus lands on the shelf. Focus wears the
+same outline the native tickboxes use for selection, plus the scale nudge the
+Card Library's sorter bars give. A stepper with nothing left to give drops out
+of the focus graph rather than stopping travel on a dead control.
+
+Getting out of the grid takes one adjustment. `NCardGrid` wires the leftmost
+card's left neighbour to the *rightmost* card of the same row, so focus wraps
+along the row and never escapes. Clearing that neighbour hands the decision to
+Godot, which searches for the nearest control in that direction and finds the
+shelf. That is exactly what `NCardLibraryGrid` does — it sets its edge
+neighbours to null rather than wrapping — and it is why the Card Library's own
+sidebar is reachable where a pile screen's would not be. The grid rewires itself
+on every rebuild and resize, so the screen reapplies this from its refresh tick.
+
+Inside the shelf, navigation is left to Godot's geometric search rather than
+wired by hand. The Card Library wires every neighbour explicitly, but its sidebar
+mixes an eight-icon grid, a four-icon row and five cost boxes; this shelf is a
+tidy stack of centred rows, which the automatic search handles.
+
 ### What the screen remembers
 
 The game builds a fresh screen every time the pile view opens, so `AllCardsSession`

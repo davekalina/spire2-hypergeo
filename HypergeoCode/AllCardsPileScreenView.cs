@@ -655,6 +655,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             if (slot < 0)
                 continue;
             holder.Position = SlotPosition(slot);
+            OpenLeftEdgeToShelf(holder, slot % columns == 0);
         }
 
         for (var index = 0; index < markerSlots.Count; index++)
@@ -676,6 +677,24 @@ internal sealed class AllCardsPileScreenView : IDisposable
         if (scrollContainer.Size.Y < requiredHeight)
             scrollContainer.Size = new Vector2(
                 scrollContainer.Size.X, requiredHeight);
+    }
+
+    /// <summary>
+    /// Let a controller leave the grid on its left edge and land on the shelf.
+    ///
+    /// NCardGrid wires the leftmost card's left neighbour to the rightmost card of the
+    /// same row, so focus wraps along the row and never escapes. Clearing that neighbour
+    /// hands the decision to Godot, which searches for the nearest control in that
+    /// direction and finds the shelf — the same thing NCardLibraryGrid does, and why the
+    /// Card Library's own sidebar is reachable. The grid rewires itself on every rebuild,
+    /// so this is reapplied from the refresh tick.
+    /// </summary>
+    private static void OpenLeftEdgeToShelf(NCardHolder holder, bool isLeftEdge)
+    {
+        // Only ever clear. A holder that stops being an edge gets a correct neighbour
+        // from the grid's own rewiring, which runs on every rebuild and every resize.
+        if (isLeftEdge && !holder.FocusNeighborLeft.IsEmpty)
+            holder.FocusNeighborLeft = new NodePath();
     }
 
     private Control ResolveMarker(int index, Control parent, Vector2 cardSize)
