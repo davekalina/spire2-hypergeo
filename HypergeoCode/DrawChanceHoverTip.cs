@@ -51,13 +51,11 @@ internal static class DrawChanceHoverTip
         if (tipSet is null)
             return;
 
-        NativeHoverTip.FormatLatestTable(tipSet, rows);
+        var tipPanel = NativeHoverTip.FormatLatestTable(tipSet, rows);
         tipSet.SetAlignmentForCardHolder(holder);
-        // Expanding the analysis table can cause the native VFlowContainer to
-        // create another tooltip column after its first placement pass. Align
-        // once more after layout so the completed set stays inside the viewport.
-        tipSet.CallDeferred(
-            NHoverTipSet.MethodName.SetAlignmentForCardHolder,
-            holder);
+        // The table's real height is only knowable after a layout pass, and the tips
+        // stack in a flow container that wraps into columns, so both the panel's height
+        // and the set's placement are settled once the engine has measured them.
+        NativeHoverTip.SettleTable(tipSet, tipPanel, holder);
     }
 }

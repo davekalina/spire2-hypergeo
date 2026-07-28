@@ -1,6 +1,7 @@
 using Godot;
 using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Localization;
+using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.HoverTips;
 using MegaCrit.Sts2.addons.mega_text;
 
@@ -27,13 +28,17 @@ internal static class NativeHoverTip
         return tip;
     }
 
-    public static void FormatLatestTable(
+    /// <summary>
+    /// Lay the tip's rows out as a table, and return the panel it was written into so
+    /// the caller can settle its height once the table has actually measured itself.
+    /// </summary>
+    public static Control? FormatLatestTable(
         NHoverTipSet tipSet,
         IReadOnlyList<(string Label, string Value)> rows)
     {
         var container = tipSet.GetNode<Control>("textHoverTipContainer");
         if (container.GetChildCount() == 0)
-            return;
+            return null;
 
         var tipPanel = container.GetChild<Control>(container.GetChildCount() - 1);
         var description = tipPanel.GetNode<MegaRichTextLabel>("%Description");
@@ -62,7 +67,53 @@ internal static class NativeHoverTip
         }
         description.Pop();
 
+        Fit(container, tipPanel, description);
+        return tipPanel;
+    }
+
+    /// <summary>
+    /// Re-measure the table once the engine has laid it out, then place the set again.
+    ///
+    /// A RichTextLabel does not know how tall a table is until it has been through a
+    /// layout pass, so the height taken immediately after building one is a guess. The
+    /// guess is usually too generous, and the panel then reserves room it does not
+    /// draw — which reads as a gap between this tip and whatever the tip container
+    /// stacks beneath it. Nothing shows it until a second tip lands below, so it only
+    /// appears when several are on screen at once.
+    ///
+    /// Three passes: build, then measure honestly, then position the settled set. Each
+    /// waits for the one before, because the container has to re-sort before its size
+    /// means anything and the placement is read from that size.
+    /// </summary>
+    public static void SettleTable(
+        NHoverTipSet tipSet, Control? tipPanel, NCardHolder holder)
+    {
+        if (tipPanel == null)
+            return;
+        Callable.From(() =>
+        {
+            if (!GodotObject.IsInstanceValid(tipSet) ||
+                !GodotObject.IsInstanceValid(tipPanel) ||
+                tipPanel.GetParent() is not Control container ||
+                tipPanel.GetNodeOrNull<MegaRichTextLabel>("%Description") is not
+                    { } description)
+                return;
+            Fit(container, tipPanel, description);
+            Callable.From(() =>
+            {
+                if (GodotObject.IsInstanceValid(tipSet) &&
+                    GodotObject.IsInstanceValid(holder))
+                    tipSet.SetAlignmentForCardHolder(holder);
+            }).CallDeferred();
+        }).CallDeferred();
+    }
+
+    private static void Fit(
+        Control container, Control tipPanel, MegaRichTextLabel description)
+    {
         var contentHeight = description.GetContentHeight();
+        if (contentHeight <= 0)
+            return;
         description.CustomMinimumSize = new Vector2(320f, contentHeight);
         description.Size = new Vector2(320f, contentHeight);
         tipPanel.ResetSize();
