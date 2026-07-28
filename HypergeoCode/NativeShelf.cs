@@ -35,6 +35,7 @@ internal sealed class NativeShelf : IDisposable
     private const string SortButtonScene = "screens/card_library/library_sort_button";
     private const string TickboxScene = "screens/card_library/card_library_tickbox";
     private const string TypeTickboxScene = "screens/card_library/card_type_tickbox";
+    private const string CardLibraryScene = "screens/card_library/card_library";
 
     private readonly MegaLabel _fontSource;
     private readonly TextureRect _buttonTextureSource;
@@ -210,6 +211,30 @@ internal sealed class NativeShelf : IDisposable
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         parent.AddChild(label);
         return label;
+    }
+
+    /// <summary>
+    /// The Card Library's search bar, text field and clear button together.
+    ///
+    /// It is built inline in the library's own scene rather than being a scene of its
+    /// own, so the only way to have one is to instantiate the library and take a copy.
+    /// The library is never added to the tree, so none of it runs.
+    /// </summary>
+    public NSearchBar AddSearchBar(VBoxContainer parent)
+    {
+        var cardLibrary = SceneHelper.Instantiate<Control>(CardLibraryScene);
+        var searchBar = (NSearchBar)cardLibrary.GetNode<NSearchBar>("%SearchBar").Duplicate();
+        cardLibrary.Free();
+
+        searchBar.Name = "HypergeoSearchBar";
+        searchBar.CustomMinimumSize = new Vector2(0, 48);
+        parent.AddChild(searchBar);
+        parent.AddChild(new Control
+        {
+            Name = "SearchSpacer",
+            CustomMinimumSize = new Vector2(0, 12),
+        });
+        return searchBar;
     }
 
     /// <summary>A wrapped note line, for text that will not fit one row.</summary>

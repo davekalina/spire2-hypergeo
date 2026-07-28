@@ -2,6 +2,7 @@ using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
@@ -51,6 +52,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly MegaLabel _hintLabel;
     private readonly MegaLabel _drawNote;
     private readonly MegaLabel _queryNote;
+    private readonly NSearchBar _searchBar;
 
     private DrawPools _pools;
     private int _chosenDrawCount;
@@ -80,6 +82,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _bottomLabel = screen.GetNode<MegaRichTextLabel>("%BottomLabel");
         _refreshTimer = new Godot.Timer { WaitTime = 0.15, Autostart = true };
         _shelf = new NativeShelf();
+
+        _searchBar = _shelf.AddSearchBar(_shelf.Top);
 
         var draw = _shelf.AddModule(_shelf.Top, "Draw");
         var drawRow = NativeShelf.CreateControlRow();
@@ -131,6 +135,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _targetDecrease.Pressed += () => ChangeTargetCount(-1);
         _targetIncrease.Pressed += () => ChangeTargetCount(1);
         overlayToggle.Toggled += OnOverlayToggled;
+        _searchBar.QueryChanged += OnSearchChanged;
         _refreshTimer.Timeout += RefreshPresentation;
     }
 
@@ -158,6 +163,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _grid.HolderAltPressed -= OnHolderPressed;
         foreach (var pile in Piles())
             pile.ContentsChanged -= Render;
+        _searchBar.QueryChanged -= OnSearchChanged;
         _refreshTimer.Timeout -= RefreshPresentation;
         _overlay.Dispose();
         foreach (var marker in _markers)
@@ -262,11 +268,15 @@ internal sealed class AllCardsPileScreenView : IDisposable
         // The grid is about to recycle its pooled holders, taking any badge with it.
         _overlay.Clear();
 
-        var sections = BuildSections();
-        var allCards = sections.SelectMany(section => section.Cards).ToList();
-        _selectedCards.RemoveWhere(card => !allCards.Contains(card));
+        // Prune against every card on the screen, not the filtered view: search hides
+        // cards, it does not deselect them or take them out of the odds.
+        var present = _pools.Draw
+            .Concat(_pools.Reshuffle)
+            .Concat(_pools.Retained)
+            .ToList();
+        _selectedCards.RemoveWhere(card => !present.Contains(card));
         _grid.SetCards(
-            allCards,
+            BuildSections().SelectMany(section => section.Cards).ToList(),
             PileType.Draw,
             new List<SortingOrders> { SortingOrders.Ascending });
         UpdateAnalysis();
@@ -284,16 +294,42 @@ internal sealed class AllCardsPileScreenView : IDisposable
     /// </summary>
     private List<GridSection> BuildSections()
     {
-        var sections = new List<GridSection>
-        {
-            new(Sort(_pools.Draw), MarkerText: null),
-        };
-        if (_pools.Reshuffle.Count > 0)
-            sections.Add(new(Sort(_pools.Reshuffle), ReshuffleMarkerText));
-        if (_pools.Retained.Count > 0)
-            sections.Add(new(Sort(_pools.Retained), RetainedMarkerText));
+        var sections = new List<GridSection> { new(Shown(_pools.Draw), MarkerText: null) };
+        var reshuffle = Shown(_pools.Reshuffle);
+        if (reshuffle.Count > 0)
+            sections.Add(new(reshuffle, ReshuffleMarkerText));
+        var retained = Shown(_pools.Retained);
+        if (retained.Count > 0)
+            sections.Add(new(retained, RetainedMarkerText));
         return sections;
     }
+
+    private List<CardModel> Shown(IEnumerable<CardModel> pile) =>
+        Sort(pile).Where(Matches).ToList();
+
+    /// <summary>
+    /// The Card Library's own search behaviour: match the card's name or the text of
+    /// its description, and let a rarity name stand for every card of that rarity.
+    ///
+    /// This only decides what the grid draws. Selections, populations and odds are all
+    /// taken from the full pools, so searching narrows the view without moving a number.
+    /// </summary>
+    private bool Matches(CardModel card)
+    {
+        var query = _searchBar.Text;
+        if (string.IsNullOrWhiteSpace(query))
+            return true;
+        query = query.ToLowerInvariant();
+        if (Enum.TryParse<CardRarity>(query, ignoreCase: true, out var rarity) &&
+            card.Rarity == rarity)
+            return true;
+        var description = card.GetDescriptionForPile(PileType.None).StripBbCode();
+        return NSearchBar
+            .Normalize($"{card.Title} {NSearchBar.RemoveHtmlTags(description)}")
+            .Contains(query);
+    }
+
+    private void OnSearchChanged(string _) => Render();
 
     private void UpdateAnalysis()
     {

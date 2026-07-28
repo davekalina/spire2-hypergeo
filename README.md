@@ -76,6 +76,13 @@ screens use.
 
 The shelf holds the whole query and its result:
 
+- **Search** — the Card Library's own search bar, at the top of the shelf. It
+  matches a card's name or the text of its description, and a rarity name stands
+  for every card of that rarity. It only decides what the grid draws: selections,
+  populations and odds all come from the full pools, so searching narrows the
+  view without moving a number. A selected card that scrolls out of the filter
+  stays selected and stays in the calculation.
+
 - **Draw** — the **−**/**+** row sets how many cards the next hand draws, and
   the effects that moved it off the base of five are named underneath. Clicking
   the count restores the real next-turn draw. While the count is set by hand the
