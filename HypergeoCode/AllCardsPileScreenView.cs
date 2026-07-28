@@ -85,9 +85,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _player = player;
         if (player.PlayerCombatState == null)
             throw new InvalidOperationException("All Cards requires active combat state.");
-        // Re-read on every open so the badge geometry can be tuned by editing the
-        // settings file, without a rebuild or a restart.
-        HypergeoSettings.Reload();
         AllCardsSession.SyncToCombat(CombatManager.Instance.DebugOnlyGetState());
         // The calculator opens on the run's deck, which is the deck a player is asking
         // questions about when they reach for it.
