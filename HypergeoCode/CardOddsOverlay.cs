@@ -21,17 +21,9 @@ internal sealed class CardOddsOverlay : IDisposable
     private const string StatsScene = "screens/card_library/card_library_stats";
     private const string BadgeName = "HypergeoOddsBadge";
 
-    // Measurements in unscaled card pixels, relative to the card's centre. The card's
-    // art (scenes/cards/card.tscn, the Portrait node) runs -125..125 across and
-    // -168..22 down, so the band spans the art exactly and sits within it. The Card
-    // Library places its own readout at -138; one band lower clears the title ribbon.
-    private const float BandLeft = -120f;
-    private const float BandRight = 120f;
-    private const float BandTop = -138f + MinBandHeight;
-    private const float MinBandHeight = 40f;  // was 60
-    private const float BandPadding = 10f;
-    private const int CaptionFontSize = 17;
-
+    // The band's placement lives in the settings file rather than here, so it can be
+    // moved by editing that and reopening the screen. See HypergeoSettings for the card
+    // geometry the numbers are measured against.
     private readonly Dictionary<ulong, Control> _badges = [];
 
     /// <summary>Whether the badges are drawn at all.</summary>
@@ -59,18 +51,22 @@ internal sealed class CardOddsOverlay : IDisposable
         var label = badge.GetNode<MegaRichTextLabel>("%Label");
         label.Text = caption == null
             ? $"[center]{percent}"
-            : $"[center][font_size={CaptionFontSize}]{caption}[/font_size]\n{percent}";
+            : $"[center][font_size={HypergeoSettings.BadgeCaptionFontSize}]{caption}" +
+              $"[/font_size]\n{percent}";
 
         // Size the band to whatever the text actually measures rather than to a guess.
         // A caption and a percentage are set at different font sizes, so their combined
         // line heights are not something to hard-code, and a band that fits its content
         // leaves the text centred whichever way the label resolves its own alignment.
         var background = badge.GetNode<Control>("Bg");
-        background.OffsetLeft = BandLeft;
-        background.OffsetRight = BandRight;
-        background.OffsetTop = BandTop;
-        background.OffsetBottom = BandTop + Math.Max(
-            MinBandHeight, label.GetContentHeight() + BandPadding * 2f);
+        background.OffsetLeft = HypergeoSettings.BadgeLeft;
+        background.OffsetRight = HypergeoSettings.BadgeRight;
+
+        var height = Math.Max(
+            HypergeoSettings.BadgeMinHeight,
+            label.GetContentHeight() + HypergeoSettings.BadgePadding);
+        background.OffsetTop = HypergeoSettings.BadgeCenterY - height * 0.5f;
+        background.OffsetBottom = HypergeoSettings.BadgeCenterY + height * 0.5f;
     }
 
     public void Hide(NCardHolder holder)
