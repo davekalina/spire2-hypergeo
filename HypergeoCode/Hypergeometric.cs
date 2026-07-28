@@ -32,6 +32,36 @@ public static class Hypergeometric
         return 1 - none;
     }
 
+    /// <summary>Chance of drawing at least <paramref name="hits" /> successes.</summary>
+    public static double AtLeast(int population, int successes, int draws, int hits)
+    {
+        if (hits <= 0)
+            return 1;
+        draws = Math.Min(draws, population);
+        double probability = 0;
+        for (var hit = hits; hit <= Math.Min(successes, draws); hit++)
+            probability += Exactly(population, successes, draws, hit);
+        return Math.Clamp(probability, 0, 1);
+    }
+
+    /// <summary>Chance of drawing no more than <paramref name="hits" /> successes.</summary>
+    public static double AtMost(int population, int successes, int draws, int hits)
+    {
+        draws = Math.Min(draws, population);
+        if (hits >= Math.Min(successes, draws))
+            return 1;
+        double probability = 0;
+        for (var hit = 0; hit <= hits; hit++)
+            probability += Exactly(population, successes, draws, hit);
+        return Math.Clamp(probability, 0, 1);
+    }
+
+    /// <summary>
+    /// Successes the sample is expected to contain. The hypergeometric mean, n·K/N.
+    /// </summary>
+    public static double ExpectedHits(int population, int successes, int draws) =>
+        population <= 0 ? 0 : Math.Min(draws, population) * (double)successes / population;
+
     public static string FormatPercent(double probability) =>
         probability.ToString("P1", System.Globalization.CultureInfo.InvariantCulture);
 

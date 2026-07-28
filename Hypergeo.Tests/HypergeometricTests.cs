@@ -63,6 +63,39 @@ public sealed class HypergeometricTests
         Assert.Equal(0.5, Hypergeometric.Exactly(10, 1, 5, 1), 12);
 
     [Fact]
+    public void AtLeast_AgreesWithAtLeastOneForASingleHit() =>
+        Assert.Equal(
+            Hypergeometric.AtLeastOne(20, 4, 5),
+            Hypergeometric.AtLeast(20, 4, 5, 1), 12);
+
+    [Fact]
+    public void AtLeastAndAtMost_PartitionTheDistribution()
+    {
+        // Every outcome is either at most k or at least k+1, so the two must sum to 1.
+        for (var hits = 0; hits <= 4; hits++)
+            Assert.Equal(1,
+                Hypergeometric.AtMost(20, 4, 5, hits) +
+                Hypergeometric.AtLeast(20, 4, 5, hits + 1), 12);
+    }
+
+    [Fact]
+    public void AtLeast_ZeroHitsIsCertainAndImpossibleHitsAreNot()
+    {
+        Assert.Equal(1, Hypergeometric.AtLeast(20, 4, 5, 0), 12);
+        Assert.Equal(0, Hypergeometric.AtLeast(20, 4, 5, 5), 12);
+        Assert.Equal(1, Hypergeometric.AtMost(20, 4, 5, 4), 12);
+    }
+
+    [Fact]
+    public void ExpectedHits_IsTheHypergeometricMean()
+    {
+        Assert.Equal(1.0, Hypergeometric.ExpectedHits(20, 4, 5), 12);
+        Assert.Equal(0, Hypergeometric.ExpectedHits(0, 0, 5), 12);
+        // A sample larger than the population still only draws the population.
+        Assert.Equal(4, Hypergeometric.ExpectedHits(20, 4, 99), 12);
+    }
+
+    [Fact]
     public void ReshufflePool_HandCardsDiluteTheSecondStage()
     {
         // Two cards in the draw pile and four in the discard. Drawing five empties

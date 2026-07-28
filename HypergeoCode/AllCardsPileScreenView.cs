@@ -53,6 +53,16 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly MegaLabel _drawNote;
     private readonly MegaLabel _queryNote;
     private readonly NSearchBar _searchBar;
+    private readonly List<Control> _combatModules;
+    private List<Control> _calculatorModules = [];
+    private NativeShelf.ShelfStepper _population = null!;
+    private NativeShelf.ShelfStepper _sample = null!;
+    private NativeShelf.ShelfStepper _successes = null!;
+    private NativeShelf.ShelfStepper _wanted = null!;
+    private NativeShelf.ShelfRow _exactlyRow = null!;
+    private NativeShelf.ShelfRow _atLeastRow = null!;
+    private NativeShelf.ShelfRow _atMostRow = null!;
+    private NativeShelf.ShelfRow _expectedRow = null!;
 
     private DrawPools _pools;
     private int _chosenDrawCount;
@@ -75,6 +85,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
         if (player.PlayerCombatState == null)
             throw new InvalidOperationException("All Cards requires active combat state.");
         AllCardsSession.SyncToCombat(CombatManager.Instance.DebugOnlyGetState());
+        // The calculator opens on the run's deck, which is the deck a player is asking
+        // questions about when they reach for it.
+        AllCardsSession.SeedCalculator(player.Deck.Cards.Count);
         _pools = DrawPools.Resolve(player);
         _chosenDrawCount = AllCardsSession.ResolveDrawCount(_pools.NaturalDrawCount);
         _overlay.Enabled = AllCardsSession.ShowOddsOnCards;
@@ -125,8 +138,14 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _heldRow = _shelf.AddRow(result.Body, "Retained");
         _chanceRow = _shelf.AddRow(result.Body, "Chance");
 
+        _combatModules = [draw.Root, selection.Root, result.Root];
+        AddCalculatorModules();
+
         var overlayToggle = _shelf.AddToggle(
             _shelf.Bottom, "Show Odds on Cards", AllCardsSession.ShowOddsOnCards);
+        var rawdogToggle = _shelf.AddToggle(
+            _shelf.Bottom, "Rawdog Mode", AllCardsSession.RawdogMode);
+        rawdogToggle.Toggled += OnRawdogToggled;
         AddAboutRow();
 
         _drawDecrease.Pressed += () => ChangeDrawCount(-1);
@@ -150,6 +169,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         // The shelf owns the readout; the native strip would only repeat it.
         _bottomLabel.Visible = false;
         InsetGridForShelf();
+        ApplyShelfMode();
         _grid.HolderPressed += OnHolderPressed;
         _grid.HolderAltPressed += OnHolderPressed;
         foreach (var pile in Piles())
@@ -172,6 +192,101 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _markers.Clear();
         _shelf.Dispose();
         RestoreRunUiOrder();
+    }
+
+    /// <summary>
+    /// The plain hypergeometric calculator, shown in place of the combat query when
+    /// Rawdog Mode is on.
+    ///
+    /// The combat modules answer a question about this turn; these four numbers answer
+    /// the same question about any deck at all, which is the one worth asking while
+    /// building one. The grid is left alone underneath — it is still worth looking at.
+    /// </summary>
+    private void AddCalculatorModules()
+    {
+        var inputs = _shelf.AddModule(_shelf.Top, "Calculator");
+        _population = _shelf.AddStepperRow(inputs.Body, "Deck");
+        _sample = _shelf.AddStepperRow(inputs.Body, "Draw");
+        _successes = _shelf.AddStepperRow(inputs.Body, "Hits in deck");
+        _wanted = _shelf.AddStepperRow(inputs.Body, "Hits wanted");
+
+        var results = _shelf.AddModule(_shelf.Top, "Odds");
+        _exactlyRow = _shelf.AddRow(results.Body, "Exactly");
+        _atLeastRow = _shelf.AddRow(results.Body, "At least");
+        _atMostRow = _shelf.AddRow(results.Body, "At most");
+        _expectedRow = _shelf.AddRow(results.Body, "Expected");
+        _calculatorModules = [inputs.Root, results.Root];
+
+        Step(_population, delta => AllCardsSession.Population += delta);
+        Step(_sample, delta => AllCardsSession.Sample += delta);
+        Step(_successes, delta => AllCardsSession.Successes += delta);
+        Step(_wanted, delta => AllCardsSession.Wanted += delta);
+    }
+
+    private void Step(NativeShelf.ShelfStepper stepper, Action<int> change)
+    {
+        stepper.Decrease.Pressed += () => { change(-1); UpdateAnalysis(); };
+        stepper.Increase.Pressed += () => { change(1); UpdateAnalysis(); };
+    }
+
+    /// <summary>
+    /// Clamp the four numbers into a shape the maths can answer, then read it out.
+    /// A sample cannot exceed its population, successes cannot exceed the population
+    /// either, and no more hits can be wanted than could possibly be drawn.
+    /// </summary>
+    private void UpdateCalculator()
+    {
+        var population = Math.Clamp(AllCardsSession.Population, 1, 999);
+        var sample = Math.Clamp(AllCardsSession.Sample, 0, population);
+        var successes = Math.Clamp(AllCardsSession.Successes, 0, population);
+        var wanted = Math.Clamp(AllCardsSession.Wanted, 0, Math.Min(successes, sample));
+        AllCardsSession.Population = population;
+        AllCardsSession.Sample = sample;
+        AllCardsSession.Successes = successes;
+        AllCardsSession.Wanted = wanted;
+
+        _population.Value.Text = population.ToString();
+        _sample.Value.Text = sample.ToString();
+        _successes.Value.Text = successes.ToString();
+        _wanted.Value.Text = wanted.ToString();
+
+        _exactlyRow.Label.Text = $"Exactly {wanted}";
+        _atLeastRow.Label.Text = $"At least {wanted}";
+        _atMostRow.Label.Text = $"At most {wanted}";
+        _exactlyRow.Value.Text = Hypergeometric.FormatPercent(
+            Hypergeometric.Exactly(population, successes, sample, wanted));
+        _atLeastRow.Value.Text = Hypergeometric.FormatPercent(
+            Hypergeometric.AtLeast(population, successes, sample, wanted));
+        _atMostRow.Value.Text = Hypergeometric.FormatPercent(
+            Hypergeometric.AtMost(population, successes, sample, wanted));
+        _expectedRow.Value.Text = Hypergeometric
+            .ExpectedHits(population, successes, sample)
+            .ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+        NativeShelf.SetButtonState(_population.Decrease, enabled: population > 1);
+        NativeShelf.SetButtonState(_population.Increase, enabled: population < 999);
+        NativeShelf.SetButtonState(_sample.Decrease, enabled: sample > 0);
+        NativeShelf.SetButtonState(_sample.Increase, enabled: sample < population);
+        NativeShelf.SetButtonState(_successes.Decrease, enabled: successes > 0);
+        NativeShelf.SetButtonState(_successes.Increase, enabled: successes < population);
+        NativeShelf.SetButtonState(_wanted.Decrease, enabled: wanted > 0);
+        NativeShelf.SetButtonState(
+            _wanted.Increase, enabled: wanted < Math.Min(successes, sample));
+    }
+
+    private void OnRawdogToggled(NTickbox tickbox)
+    {
+        AllCardsSession.RawdogMode = tickbox.IsTicked;
+        ApplyShelfMode();
+        UpdateAnalysis();
+    }
+
+    private void ApplyShelfMode()
+    {
+        foreach (var module in _combatModules)
+            module.Visible = !AllCardsSession.RawdogMode;
+        foreach (var module in _calculatorModules)
+            module.Visible = AllCardsSession.RawdogMode;
     }
 
     /// <summary>
@@ -368,6 +483,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         NativeShelf.SetButtonState(
             _targetIncrease, enabled: selectedTotal > 0 && requiredHits < selectedTotal);
 
+        UpdateCalculator();
         RebuildOverlayText(selectedTotal, requiredHits, chance);
         RefreshPresentation();
     }

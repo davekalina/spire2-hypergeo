@@ -102,6 +102,13 @@ The shelf holds the whole query and its result:
   (`This card`, `Any of 3`, `2 of 3`, `All 3`) so it is not mistaken for that
   card's own odds. The band spans the card's own art rect and sizes itself to
   the text.
+- **Rawdog Mode** — replaces the combat query with a plain hypergeometric
+  calculator: deck size, draw size, hits in deck, hits wanted, each on a stepper.
+  It opens on the run's deck size, because a calculator is reached for to ask
+  about a deck being built rather than about this turn. It reports the chance of
+  **exactly**, **at least** and **at most** that many hits, plus the number of
+  hits the draw is **expected** to contain. The card grid is left alone
+  underneath, still searchable.
 - The footer carries the mod name and version, with a **?** button whose hover
   tip explains the screen. That tip is `HelpText` in
   `HypergeoCode/AllCardsPileScreenView.cs`.

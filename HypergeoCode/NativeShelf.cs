@@ -237,6 +237,33 @@ internal sealed class NativeShelf : IDisposable
         return searchBar;
     }
 
+    /// <summary>
+    /// A named value with a stepper: the label reads left, the controls sit right.
+    /// Tighter than a caption over a centred row, which matters when several stack up.
+    /// </summary>
+    public ShelfStepper AddStepperRow(VBoxContainer parent, string label)
+    {
+        var row = new HBoxContainer { Name = $"{label}Stepper" };
+        row.AddThemeConstantOverride("separation", 4);
+
+        var caption = CreateText(label, 15);
+        caption.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        caption.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        caption.HorizontalAlignment = HorizontalAlignment.Left;
+        caption.VerticalAlignment = VerticalAlignment.Center;
+        row.AddChild(caption);
+
+        var decrease = CreateButton("−", 36);
+        var value = CreateDisplay(string.Empty, 46);
+        var increase = CreateButton("+", 36);
+        row.AddChild(decrease.Root);
+        row.AddChild(value.Root);
+        row.AddChild(increase.Root);
+
+        parent.AddChild(row);
+        return new ShelfStepper(row, decrease.Input, value.Label, increase.Input);
+    }
+
     /// <summary>A wrapped note line, for text that will not fit one row.</summary>
     public MegaLabel AddNote(VBoxContainer parent, string text, int fontSize = 15)
     {
@@ -439,6 +466,8 @@ internal sealed class NativeShelf : IDisposable
     }
 
     internal sealed record ShelfModule(VBoxContainer Root, VBoxContainer Body);
+    internal sealed record ShelfStepper(
+        HBoxContainer Root, Button Decrease, MegaLabel Value, Button Increase);
     internal sealed record ShelfRow(HBoxContainer Root, MegaLabel Label, MegaLabel Value);
     internal sealed record ShelfButton(Control Root, Button Input, MegaLabel Label);
     internal sealed record ShelfDisplay(Control Root, Control Visual, MegaLabel Label);

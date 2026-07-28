@@ -33,6 +33,33 @@ internal static class AllCardsSession
     public static int TargetHits { get; set; } = 1;
 
     /// <summary>
+    /// Whether the shelf shows the plain hypergeometric calculator instead of the
+    /// combat query. A view preference, so it outlives combat like the odds overlay.
+    /// </summary>
+    public static bool RawdogMode { get; set; }
+
+    /// <summary>
+    /// The calculator's four numbers, and whether they have been seeded from the deck
+    /// yet. Seeding is deferred because the deck size is only known once a screen opens.
+    /// </summary>
+    public static int Population { get; set; }
+    public static int Sample { get; set; }
+    public static int Successes { get; set; }
+    public static int Wanted { get; set; }
+    public static bool CalculatorSeeded { get; private set; }
+
+    public static void SeedCalculator(int population)
+    {
+        if (CalculatorSeeded)
+            return;
+        CalculatorSeeded = true;
+        Population = Math.Max(1, population);
+        Sample = Math.Min(5, Population);
+        Successes = Math.Min(1, Population);
+        Wanted = Math.Min(1, Successes);
+    }
+
+    /// <summary>
     /// A draw count the player set by hand, and the natural count it was set against.
     /// Both null while the screen is simply showing the real next-turn draw.
     /// </summary>
@@ -52,6 +79,8 @@ internal static class AllCardsSession
         SelectedCards.Clear();
         TargetHits = 1;
         ClearChosenDrawCount();
+        // The deck changes between fights, so the calculator reseeds from the new one.
+        CalculatorSeeded = false;
     }
 
     public static void SetChosenDrawCount(int chosen, int natural)
