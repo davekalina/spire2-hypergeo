@@ -355,13 +355,57 @@ internal sealed class AllCardsPileScreenView : IDisposable
     }
 
     /// <summary>
+    /// Navigate the grid by the layout on screen rather than by the grid's own idea of
+    /// its rows.
+    ///
+    /// NCardGrid numbers holders in the order it was handed them and wires focus from
+    /// that. This screen then repositions them around the section markers, so the two
+    /// disagree by however many markers precede a card — and focus jumps somewhere the
+    /// card visibly is not, which reads as identical cards being confused for each
+    /// other. Wiring from the slots the cards were actually placed in keeps focus
+    /// travelling the way the grid looks. Marker slots hold no card, so travel steps
+    /// over them.
+    /// </summary>
+    private void WireGridFocus(
+        Dictionary<int, NCardHolder> bySlot, int columns, int lastSlot)
+    {
+        NCardHolder? Seek(int from, int step, Func<int, bool> withinBounds)
+        {
+            for (var slot = from; withinBounds(slot); slot += step)
+                if (bySlot.TryGetValue(slot, out var found))
+                    return found;
+            return null;
+        }
+
+        var leftEdge = new List<NCardHolder>();
+        foreach (var (slot, holder) in bySlot)
+        {
+            var rowStart = slot - slot % columns;
+            var left = Seek(slot - 1, -1, candidate => candidate >= rowStart);
+            var right = Seek(slot + 1, 1, candidate => candidate <= rowStart + columns - 1);
+            var up = Seek(slot - columns, -columns, candidate => candidate >= 0);
+            var down = Seek(slot + columns, columns, candidate => candidate <= lastSlot);
+
+            // Pointing at itself parks focus, which is what the edges of the grid want.
+            holder.FocusNeighborRight = (right ?? holder).GetPath();
+            holder.FocusNeighborTop = (up ?? holder).GetPath();
+            holder.FocusNeighborBottom = (down ?? holder).GetPath();
+            if (left != null)
+                holder.FocusNeighborLeft = left.GetPath();
+            else
+                leftEdge.Add(holder);
+        }
+        WireShelfSeam(leftEdge);
+    }
+
+    /// <summary>
     /// Hand focus across the gap between the shelf and the grid, in both directions.
     ///
     /// Neither side can be wired once and left: the grid rebuilds its holders, and which
     /// card sits at the left edge changes with the column count, so both ends are
     /// reapplied from the refresh tick.
     /// </summary>
-    private void WireGridSeam(IReadOnlyList<NCardHolder> leftEdge)
+    private void WireShelfSeam(IReadOnlyList<NCardHolder> leftEdge)
     {
         if (leftEdge.Count == 0 || _shelfRows.Count == 0)
             return;
@@ -743,7 +787,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             slots.AddRange(section.Cards);
         }
 
-        var leftEdge = new List<NCardHolder>();
+        var bySlot = new Dictionary<int, NCardHolder>();
         foreach (var holder in _grid.CurrentlyDisplayedCardHolders)
         {
             if (holder.CardModel is not { } card)
@@ -752,10 +796,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
             if (slot < 0)
                 continue;
             holder.Position = SlotPosition(slot);
-            if (slot % columns == 0)
-                leftEdge.Add(holder);
+            bySlot[slot] = holder;
         }
-        WireGridSeam(leftEdge);
+        WireGridFocus(bySlot, columns, slots.Count - 1);
 
         for (var index = 0; index < markerSlots.Count; index++)
         {

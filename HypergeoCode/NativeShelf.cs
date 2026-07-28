@@ -1,4 +1,5 @@
 using Godot;
+using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
@@ -333,6 +334,17 @@ internal sealed class NativeShelf : IDisposable
         input.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         // The default focus box is a grey rectangle that looks nothing like the game.
         input.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
+        // A Godot button fires on ui_accept, which the game binds to E and the north
+        // face button. Confirm in this game is select — Enter and the south face button
+        // — the action every native control acts on, so this one has to as well.
+        input.GuiInput += inputEvent =>
+        {
+            if (!inputEvent.IsActionReleased(MegaInput.select))
+                return;
+            input.AcceptEvent();
+            if (!input.Disabled)
+                input.EmitSignal(BaseButton.SignalName.Pressed);
+        };
         input.MouseEntered += () => AnimateButton(display.Visual, 1.04f, 0.06);
         input.MouseExited += () => AnimateButton(display.Visual, 1f, 0.16);
         // Focus wears the same outline the native tickboxes use for selection, which
@@ -499,15 +511,14 @@ internal sealed class NativeShelf : IDisposable
     }
 
     /// <summary>
-    /// A disabled button also leaves the focus graph, so controller travel steps over a
-    /// stepper that has nothing left to give rather than stopping on it.
+    /// A disabled button keeps its place in the focus graph. Dropping out of it would
+    /// mean a whole row vanishing from controller travel whenever its controls happened
+    /// to be spent — the Selection row disappears entirely before anything is selected —
+    /// which reads as a section being skipped rather than as a control being inert.
     /// </summary>
     public static void SetButtonState(Button input, bool enabled)
     {
         input.Disabled = !enabled;
-        input.FocusMode = enabled
-            ? Control.FocusModeEnum.All
-            : Control.FocusModeEnum.None;
         if (input.GetParent()?.GetNodeOrNull<CanvasItem>("NativeVisual") is { } visual)
             visual.SelfModulate = enabled
                 ? new Color(0.86f, 0.86f, 0.86f, 1)
