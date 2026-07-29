@@ -92,9 +92,13 @@ internal sealed class AllCardsScreenView : IDisposable
     }
 
     /// <summary>
-    /// The same tip the native pile buttons show, placed the same way: the game
-    /// positions those by hand above the button rather than letting the tip find its
-    /// own spot, because the combat UI runs along the bottom edge.
+    /// The tip sits directly above the button, measured from its own height rather than
+    /// dropped at a fixed offset. The combat UI runs along the bottom edge, so a tip
+    /// has to open upwards, and its height depends on how far the description wraps.
+    ///
+    /// The column is moved, not the set: CreateAndShow has already lifted the column to
+    /// keep it on screen, and moving the set as well would apply that lift twice — which
+    /// is what left this tip floating well above the button.
     ///
     /// The shortcut is named from its current binding rather than its default, so a
     /// rebound key is the one the tip reports.
@@ -111,9 +115,11 @@ internal sealed class AllCardsScreenView : IDisposable
                 "Show view of all cards - draw pile, reshuffle, and cards-in-hand. " +
                 "Select cards to calculate draw chance.",
                 "Hypergeo:AllCardsButton"));
-        if (tipSet != null)
-            tipSet.GlobalPosition =
-                _visualButton.GlobalPosition + new Vector2(14f, -375f);
+        if (tipSet?.GetNodeOrNull<Control>("textHoverTipContainer") is not { } column)
+            return;
+        var button = _visualButton.GetGlobalRect();
+        column.GlobalPosition = new Vector2(
+            button.Position.X, button.Position.Y - column.Size.Y - 12f);
     }
 
     private void OnMouseExited()

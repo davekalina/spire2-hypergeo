@@ -1,6 +1,7 @@
 using Godot;
 using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Localization;
+using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.HoverTips;
 using MegaCrit.Sts2.addons.mega_text;
@@ -9,6 +10,9 @@ namespace Hypergeo.HypergeoCode;
 
 internal static class NativeHoverTip
 {
+    /// <summary>Native text hover tips are 360 px wide, with a 320 px content area.</summary>
+    private const float HoverTipWidth = 360f;
+
     private static readonly System.Reflection.PropertyInfo TitleProperty =
         typeof(HoverTip).GetProperty(nameof(HoverTip.Title)) ??
         throw new MissingMemberException(typeof(HoverTip).FullName, nameof(HoverTip.Title));
@@ -117,6 +121,32 @@ internal static class NativeHoverTip
         description.CustomMinimumSize = new Vector2(320f, contentHeight);
         description.Size = new Vector2(320f, contentHeight);
         tipPanel.ResetSize();
+        ResizeColumn(container);
+    }
+
+    /// <summary>
+    /// Re-height the column of tips to the panels actually in it.
+    ///
+    /// NHoverTipSet grows this column as each tip is added, by that tip's height at the
+    /// time. Replacing one tip's text with a taller table leaves the column sized for
+    /// the shorter version, and the column is a flow container — content it was not
+    /// sized for wraps into a second column, which is why tips ended up side by side.
+    /// The same height is what decides how far the set is lifted to stay on screen, so
+    /// a stale one also throws the placement off.
+    ///
+    /// Past a full screen's worth the game stops growing the column and lets it wrap,
+    /// which is a reasonable answer to a genuinely enormous stack, so that is left be.
+    /// </summary>
+    private static void ResizeColumn(Control container)
+    {
+        const float spacing = 5f;
+        var needed = 0f;
+        foreach (var child in container.GetChildren())
+            if (child is Control { Visible: true } panel)
+                needed += panel.Size.Y + spacing;
+        var ceiling = (NGame.Instance?.GetViewportRect().Size.Y ?? 0f) - 50f;
+        if (needed > 0 && needed < ceiling)
+            container.Size = new Vector2(HoverTipWidth, needed);
         if (container is Container flow)
             flow.QueueSort();
     }
