@@ -300,7 +300,20 @@ internal sealed class NativeShelf : IDisposable
         box.GetNodeOrNull<Control>("%Description")?.Hide();
         box.GetNodeOrNull<Control>("%Icon")?.Hide();
         if (box.GetNodeOrNull<BoxContainer>("TextContainer/VBoxContainer") is { } stack)
+        {
+            // The tip's stack carries no vertical size flag, so it shrinks to its text
+            // and sits at the top — right for a tooltip that grows downwards, wrong for
+            // a heading in a fixed square. Filling the height gives Center something to
+            // centre within.
+            stack.SizeFlagsVertical = Control.SizeFlags.Fill;
             stack.Alignment = BoxContainer.AlignmentMode.Center;
+        }
+        // The tip's margins lean right and down to leave room for its icon, which this
+        // box does not show. Even them up so the heading lands on the middle.
+        if (box.GetNodeOrNull<MarginContainer>("TextContainer") is { } text)
+            foreach (var side in new[]
+                     { "margin_left", "margin_top", "margin_right", "margin_bottom" })
+                text.AddThemeConstantOverride(side, 16);
 
         var heading = box.GetNode<MegaLabel>("%Title");
         heading.AutoSizeEnabled = false;
