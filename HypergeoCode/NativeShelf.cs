@@ -295,33 +295,26 @@ internal sealed class NativeShelf : IDisposable
 
         // The game's own hover tip panel, borrowed for its frame: a separator is a label
         // for the run of cards after it, and this is the box the game puts labels in.
+        //
+        // Only the frame. Its own text nodes stay hidden and the heading is a sibling of
+        // the box rather than a child, because the panel sets a negative right and
+        // bottom margin so its shadow can hang past the frame — which drags everything
+        // inside it off-centre too. Centring on the box's own rect sidesteps all of it.
         var box = SceneHelper.Instantiate<Control>(HoverTipScene);
         box.Name = "MarkerBox";
+        box.GetNodeOrNull<Control>("%Title")?.Hide();
         box.GetNodeOrNull<Control>("%Description")?.Hide();
         box.GetNodeOrNull<Control>("%Icon")?.Hide();
-        if (box.GetNodeOrNull<BoxContainer>("TextContainer/VBoxContainer") is { } stack)
-        {
-            // The tip's stack carries no vertical size flag, so it shrinks to its text
-            // and sits at the top — right for a tooltip that grows downwards, wrong for
-            // a heading in a fixed square. Filling the height gives Center something to
-            // centre within.
-            stack.SizeFlagsVertical = Control.SizeFlags.Fill;
-            stack.Alignment = BoxContainer.AlignmentMode.Center;
-        }
-        // The tip's margins lean right and down to leave room for its icon, which this
-        // box does not show. Even them up so the heading lands on the middle.
-        if (box.GetNodeOrNull<MarginContainer>("TextContainer") is { } text)
-            foreach (var side in new[]
-                     { "margin_left", "margin_top", "margin_right", "margin_bottom" })
-                text.AddThemeConstantOverride(side, 16);
+        root.AddChild(box);
 
-        var heading = box.GetNode<MegaLabel>("%Title");
-        heading.AutoSizeEnabled = false;
-        heading.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        var heading = CreateText(string.Empty, 22);
+        heading.Name = "MarkerHeading";
+        heading.AddThemeColorOverride("font_color", HeaderColor);
         heading.HorizontalAlignment = HorizontalAlignment.Center;
         heading.VerticalAlignment = VerticalAlignment.Center;
         heading.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        root.AddChild(box);
+        heading.MouseFilter = Control.MouseFilterEnum.Ignore;
+        root.AddChild(heading);
 
         var marker = new ShelfMarker { Root = root, Box = box, Heading = heading };
         // Pass, not Stop: the marker sits in the card grid, which reads mouse events of

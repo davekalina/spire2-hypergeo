@@ -874,6 +874,10 @@ internal sealed class AllCardsPileScreenView : IDisposable
             marker.Box.CustomMinimumSize = side;
             marker.Box.Size = side;
             marker.Box.Position = (cardSize - side) * 0.5f;
+            // The heading sits on the box's own rect, so it is centred on the frame the
+            // player sees rather than on the panel's shadow-shifted interior.
+            marker.Heading.Position = marker.Box.Position;
+            marker.Heading.Size = side;
         }
         for (var index = markerSlots.Count; index < _markers.Count; index++)
             _markers[index].Root.Visible = false;
