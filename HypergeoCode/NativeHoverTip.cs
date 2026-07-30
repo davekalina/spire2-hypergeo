@@ -56,7 +56,9 @@ internal static class NativeHoverTip
         description.Size = new Vector2(320f, Math.Max(1f, description.Size.Y));
         description.Clear();
         description.PushTable(2);
-        description.SetTableColumnExpand(0, true, 3, false);
+        // 2:1 rather than 3:1. "100.00 %" needs more than a quarter of 320 px, and a
+        // percentage that does not fit has nowhere to go but a line of its own.
+        description.SetTableColumnExpand(0, true, 2, false);
         description.SetTableColumnExpand(1, true, 1, false);
         foreach (var row in rows)
         {

@@ -23,8 +23,11 @@ internal static class AllCardsSession
     private static object? _combat;
     private static string? _pileFingerprint;
 
-    /// <summary>Whether the per-card odds overlay is switched on. Outlives combat.</summary>
-    public static bool ShowOddsOnCards { get; set; }
+    /// <summary>
+    /// Whether the per-card odds overlay is switched on. Outlives combat, and starts on
+    /// — the odds are what the screen is for.
+    /// </summary>
+    public static bool ShowOddsOnCards { get; set; } = true;
 
     /// <summary>The cards the player picked, by instance.</summary>
     public static HashSet<CardModel> SelectedCards { get; } = [];

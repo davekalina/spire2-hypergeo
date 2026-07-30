@@ -40,6 +40,7 @@ internal sealed class NativeShelf : IDisposable
     private const string TickboxScene = "screens/card_library/card_library_tickbox";
     private const string TypeTickboxScene = "screens/card_library/card_type_tickbox";
     private const string CardLibraryScene = "screens/card_library/card_library";
+    private const string HoverTipScene = "ui/hover_tip";
 
     private readonly MegaLabel _fontSource;
     private readonly TextureRect _buttonTextureSource;
@@ -292,35 +293,35 @@ internal sealed class NativeShelf : IDisposable
     {
         var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
 
-        var stack = new VBoxContainer
-        {
-            Name = "MarkerStack",
-            Alignment = BoxContainer.AlignmentMode.Center,
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-        };
-        stack.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        // The game's own hover tip panel, borrowed for its frame: a separator is a label
+        // for the run of cards after it, and this is the box the game puts labels in.
+        var box = SceneHelper.Instantiate<Control>(HoverTipScene);
+        box.Name = "MarkerBox";
+        box.GetNodeOrNull<Control>("%Description")?.Hide();
+        box.GetNodeOrNull<Control>("%Icon")?.Hide();
+        if (box.GetNodeOrNull<BoxContainer>("TextContainer/VBoxContainer") is { } stack)
+            stack.Alignment = BoxContainer.AlignmentMode.Center;
 
-        var heading = CreateDisplay(string.Empty, 0);
-        heading.Root.Name = "MarkerHeading";
-        heading.Root.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        // The display picks a font size from its text, which is empty until the grid
-        // fills it in, so the heading sets its own.
-        heading.Label.AddThemeFontSizeOverride("font_size", 20);
-        stack.AddChild(heading.Root);
-        root.AddChild(stack);
+        var heading = box.GetNode<MegaLabel>("%Title");
+        heading.AutoSizeEnabled = false;
+        heading.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        heading.HorizontalAlignment = HorizontalAlignment.Center;
+        heading.VerticalAlignment = VerticalAlignment.Center;
+        heading.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        root.AddChild(box);
 
-        var marker = new ShelfMarker { Root = root, Heading = heading.Label };
+        var marker = new ShelfMarker { Root = root, Box = box, Heading = heading };
         // Pass, not Stop: the marker sits in the card grid, which reads mouse events of
         // its own to drag-scroll, and swallowing them would make it a dead patch.
-        heading.Root.MouseFilter = Control.MouseFilterEnum.Pass;
-        heading.Root.MouseEntered += () => NHoverTipSet.CreateAndShow(
-            heading.Root,
+        box.MouseFilter = Control.MouseFilterEnum.Pass;
+        box.MouseEntered += () => NHoverTipSet.CreateAndShow(
+            box,
             NativeHoverTip.Create(
                 marker.Heading.Text,
                 marker.Description,
                 $"HypergeoSection:{marker.Heading.Text}"),
             HoverTipAlignment.Right);
-        heading.Root.MouseExited += () => NHoverTipSet.Remove(heading.Root);
+        box.MouseExited += () => NHoverTipSet.Remove(box);
         return marker;
     }
 
@@ -614,6 +615,7 @@ internal sealed class NativeShelf : IDisposable
     internal sealed class ShelfMarker
     {
         public required Control Root { get; init; }
+        public required Control Box { get; init; }
         public required MegaLabel Heading { get; init; }
         public string Description { get; set; } = string.Empty;
     }

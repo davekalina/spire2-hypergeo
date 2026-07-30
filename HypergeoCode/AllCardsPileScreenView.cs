@@ -350,6 +350,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             rows.Add(new Control[] { _selectionReset });
         }
         rows.Add(new Control[] { _overlayToggle });
+        rows.Add(new Control[] { _handToggle });
         rows.Add(new Control[] { _rawdogToggle });
         rows.Add(new Control[] { _helpButton });
 
@@ -373,7 +374,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
                      _sample.Decrease, _sample.Increase,
                      _successes.Decrease, _successes.Increase,
                      _wanted.Decrease, _wanted.Increase,
-                     _overlayToggle, _rawdogToggle, _helpButton,
+                     _overlayToggle, _handToggle, _rawdogToggle, _helpButton,
                  })
         {
             var tracked = control;
@@ -867,6 +868,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
             marker.Root.CustomMinimumSize = cardSize;
             marker.Root.Size = cardSize;
             marker.Root.Position = SlotPosition(slot) - cardSize * 0.5f;
+            // A square as wide as a card, centred in the taller card slot: enough of a
+            // box to read as a label without pretending to be another card.
+            var side = new Vector2(cardSize.X, cardSize.X);
+            marker.Box.CustomMinimumSize = side;
+            marker.Box.Size = side;
+            marker.Box.Position = (cardSize - side) * 0.5f;
         }
         for (var index = markerSlots.Count; index < _markers.Count; index++)
             _markers[index].Root.Visible = false;

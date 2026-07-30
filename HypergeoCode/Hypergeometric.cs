@@ -71,10 +71,16 @@ public static class Hypergeometric
     {
         const double smallest = 0.0001;
         var culture = System.Globalization.CultureInfo.InvariantCulture;
+        // Non-breaking spaces throughout. A percentage is one token to read, and the
+        // hover tip lays these out in a narrow table column where an ordinary space
+        // lets the sign wrap onto a line of its own.
         return probability > 0 && probability < smallest
-            ? "< " + smallest.ToString("P2", culture)
-            : probability.ToString("P2", culture);
+            ? "< " + Percent(smallest, culture)
+            : Percent(probability, culture);
     }
+
+    private static string Percent(double probability, IFormatProvider culture) =>
+        (probability * 100).ToString("0.00", culture) + " %";
 
     private static double LogChoose(int n, int k)
     {
