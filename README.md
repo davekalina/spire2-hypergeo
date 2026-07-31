@@ -94,6 +94,10 @@ The shelf holds the whole query and its result:
   ("Chance to draw Strike or Neutralize:"), then the required hits and the
   probability. A **Retained** row appears when a selection includes retained
   cards, which explains a lower-than-expected result.
+- **Combine Same Card Odds** — on by default, so an on-card chance covers every
+  copy of that card: "will I draw a Strike" is the usual question. Off answers
+  for that physical copy alone, which differs between copies once they sit in
+  different piles. The hover tip reports both either way.
 - **Show Odds on Cards** — prints chances onto the cards themselves, using the
   same on-card readout as the Card Library's View Stats toggle. With nothing
   selected each card carries its own any-copy chance. Once cards are selected

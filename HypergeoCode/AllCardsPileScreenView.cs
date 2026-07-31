@@ -32,7 +32,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly NativeShelf _shelf;
     private readonly CardOddsOverlay _overlay = new();
     private readonly List<NativeShelf.ShelfMarker> _markers = [];
-    private readonly Dictionary<CardIdentity, string> _overlayText = [];
+    private readonly Dictionary<CardModel, string> _overlayText = [];
 
     private readonly Button _drawDecrease;
     private readonly Button _drawIncrease;
@@ -54,6 +54,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly NLibraryStatTickbox _overlayToggle;
     private readonly NLibraryStatTickbox _rawdogToggle;
     private readonly NLibraryStatTickbox _handToggle;
+    private readonly NLibraryStatTickbox _combineToggle;
     private Button _helpButton = null!;
     private readonly List<Control> _combatModules;
     private List<Control> _calculatorModules = [];
@@ -155,6 +156,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         _overlayToggle = _shelf.AddToggle(
             _shelf.Bottom, "Show Odds on Cards", AllCardsSession.ShowOddsOnCards);
+        _combineToggle = _shelf.AddToggle(
+            _shelf.Bottom,
+            "Combine Same Card Odds",
+            AllCardsSession.CombineSameCardOdds);
+        _combineToggle.Toggled += OnCombineToggled;
         _handToggle = _shelf.AddToggle(
             _shelf.Bottom,
             "Include Hand in Reshuffle",
@@ -350,6 +356,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             rows.Add(new Control[] { _selectionReset });
         }
         rows.Add(new Control[] { _overlayToggle });
+        rows.Add(new Control[] { _combineToggle });
         rows.Add(new Control[] { _handToggle });
         rows.Add(new Control[] { _rawdogToggle });
         rows.Add(new Control[] { _helpButton });
@@ -374,7 +381,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
                      _sample.Decrease, _sample.Increase,
                      _successes.Decrease, _successes.Increase,
                      _wanted.Decrease, _wanted.Increase,
-                     _overlayToggle, _handToggle, _rawdogToggle, _helpButton,
+                     _overlayToggle, _combineToggle, _handToggle, _rawdogToggle,
+                     _helpButton,
                  })
         {
             var tracked = control;
@@ -768,16 +776,42 @@ internal sealed class AllCardsPileScreenView : IDisposable
             return;
         }
 
-        foreach (var identity in _pools.Draw
-                     .Concat(_pools.Discard)
-                     .Concat(_pools.Hand)
-                     .Select(CardIdentity.From)
-                     .Distinct())
+        var everyCard = _pools.Draw.Concat(_pools.Discard).Concat(_pools.Hand);
+        if (!AllCardsSession.CombineSameCardOdds)
         {
-            var anyCopy = _pools.ChanceOfAny(
-                card => CardIdentity.From(card) == identity, _chosenDrawCount);
-            _overlayText[identity] = Hypergeometric.FormatPercent(anyCopy);
+            // One physical card. Two copies of the same card differ once they sit in
+            // different piles, so each is asked about on its own.
+            foreach (var card in everyCard)
+                _overlayText[card] = Hypergeometric.FormatPercent(
+                    _pools.ChanceOfAny(
+                        candidate => ReferenceEquals(candidate, card),
+                        _chosenDrawCount));
+            return;
         }
+
+        // Any copy of the card, which is the usual question and the same number the
+        // hover tip's headline row gives. Copies share an answer, so it is worked out
+        // once per distinct card rather than once per copy.
+        var byIdentity = new Dictionary<CardIdentity, string>();
+        foreach (var card in everyCard)
+        {
+            var identity = CardIdentity.From(card);
+            if (!byIdentity.TryGetValue(identity, out var text))
+            {
+                text = Hypergeometric.FormatPercent(
+                    _pools.ChanceOfAny(
+                        candidate => CardIdentity.From(candidate) == identity,
+                        _chosenDrawCount));
+                byIdentity[identity] = text;
+            }
+            _overlayText[card] = text;
+        }
+    }
+
+    private void OnCombineToggled(NTickbox tickbox)
+    {
+        AllCardsSession.CombineSameCardOdds = tickbox.IsTicked;
+        UpdateAnalysis();
     }
 
     private void RefreshPresentation()
@@ -799,7 +833,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
                     _overlay.Show(holder, selectionPercent, _selectionCaption);
                 else
                     _overlay.Hide(holder);
-            else if (_overlayText.TryGetValue(CardIdentity.From(card), out var anyCopy))
+            else if (_overlayText.TryGetValue(card, out var anyCopy))
                 _overlay.Show(holder, anyCopy);
             else
                 _overlay.Hide(holder);

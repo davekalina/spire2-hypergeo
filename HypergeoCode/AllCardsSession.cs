@@ -36,6 +36,17 @@ internal static class AllCardsSession
     public static int TargetHits { get; set; }
 
     /// <summary>
+    /// Whether an on-card chance covers every copy of that card or only the one it is
+    /// printed on.
+    ///
+    /// On by default: "will I draw a Strike" is the usual question, and with three in
+    /// the deck the answer for any of them is the useful one. Off answers for that
+    /// physical copy alone, which differs between copies once they sit in different
+    /// piles.
+    /// </summary>
+    public static bool CombineSameCardOdds { get; set; } = true;
+
+    /// <summary>
     /// Whether the shelf shows the plain hypergeometric calculator instead of the
     /// combat query. A view preference, so it outlives combat like the odds overlay.
     /// </summary>
