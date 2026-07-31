@@ -43,6 +43,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly Button _selectionReset;
     private readonly Control _targetCountVisual;
     private readonly HBoxContainer _resetRow;
+    private readonly Button _simulateDeal;
+    private readonly Button _simulateReset;
+    private readonly Control _simulateResetRoot;
+    private readonly MegaLabel _simulateNote;
+    private bool _dealPending;
     private readonly MegaLabel _targetCountLabel;
     private readonly NativeShelf.ShelfRow _needRow;
     private readonly NativeShelf.ShelfRow _heldRow;
@@ -103,12 +108,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         _searchBar = _shelf.AddSearchBar(_shelf.Top);
 
-        // Draw and Hits are the two numbers the question is asked in terms of, so they
-        // share a module rather than heading one each. Both stack down the middle of
-        // the shelf: the name, its controls, then whatever qualifies it.
-        var parameters = _shelf.AddModule(_shelf.Top, "Parameters");
-
-        _shelf.AddSubHeading(parameters.Body, "Draw");
+        var draw = _shelf.AddModule(_shelf.Top, "Draw");
         var drawRow = NativeShelf.CreateControlRow();
         var drawDecreaseControl = _shelf.CreateButton("−", 48);
         var drawCountControl = _shelf.CreateButton(
@@ -124,13 +124,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
         drawRow.AddChild(drawDecreaseControl.Root);
         drawRow.AddChild(drawCountControl.Root);
         drawRow.AddChild(drawIncreaseControl.Root);
-        parameters.Body.AddChild(drawRow);
-        _shelf.AddCaption(parameters.Body, "cards next hand");
-        _drawNote = _shelf.AddNote(parameters.Body, string.Empty, 13);
+        draw.Body.AddChild(drawRow);
+        _shelf.AddCaption(draw.Body, "cards next hand");
+        _drawNote = _shelf.AddNote(draw.Body, string.Empty, 13);
 
-        NativeShelf.AddSeparator(parameters.Body);
-
-        _shelf.AddSubHeading(parameters.Body, "Hits");
+        var selection = _shelf.AddModule(_shelf.Top, "Hits");
         var targetRow = NativeShelf.CreateControlRow();
         var targetDecreaseControl = _shelf.CreateButton("−", 48);
         var targetCountControl = _shelf.CreateDisplay(string.Empty, 52);
@@ -141,9 +139,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
         targetRow.AddChild(targetDecreaseControl.Root);
         targetRow.AddChild(targetCountControl.Root);
         targetRow.AddChild(targetIncreaseControl.Root);
-        parameters.Body.AddChild(targetRow);
+        selection.Body.AddChild(targetRow);
         _targetCountVisual = targetCountControl.Visual;
-        _hintLabel = _shelf.AddCaption(parameters.Body, string.Empty);
+        _hintLabel = _shelf.AddCaption(selection.Body, string.Empty);
 
         var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
         _queryNote = _shelf.AddNote(result.Body, string.Empty);
@@ -158,7 +156,30 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _resetRow.AddChild(resetControl.Root);
         result.Body.AddChild(_resetRow);
 
-        _combatModules = [parameters.Root, result.Root];
+        // Dealing a hand answers the same question the percentages do, in the one form
+        // a percentage cannot take: actual cards, laid out where the piles were.
+        var simulate = _shelf.AddModule(_shelf.Top, "Simulate");
+        var simulateRow = NativeShelf.CreateControlRow();
+        var dealControl = _shelf.CreateButton(
+            "Draw",
+            104,
+            "Deal a draw at random from the draw pile, then from the reshuffle if the " +
+            "draw pile runs out. Deal again as often as you like.",
+            "Simulate Draw");
+        _simulateDeal = dealControl.Input;
+        simulateRow.AddChild(dealControl.Root);
+        var simulateResetControl = _shelf.CreateButton(
+            "Reset", 104, "Put the dealt hand away and show the real piles again.");
+        _simulateReset = simulateResetControl.Input;
+        _simulateResetRoot = simulateResetControl.Root;
+        // Nothing to put away until a hand is dealt. UpdateSimulationControls brings it
+        // back if the session already holds one.
+        _simulateResetRoot.Visible = false;
+        simulateRow.AddChild(simulateResetControl.Root);
+        simulate.Body.AddChild(simulateRow);
+        _simulateNote = _shelf.AddNote(simulate.Body, string.Empty, 13);
+
+        _combatModules = [draw.Root, selection.Root, result.Root, simulate.Root];
         AddCalculatorModules();
 
         _overlayToggle = _shelf.AddToggle(
@@ -184,6 +205,8 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _targetDecrease.Pressed += () => ChangeTargetCount(-1);
         _targetIncrease.Pressed += () => ChangeTargetCount(1);
         _selectionReset.Pressed += ClearSelection;
+        _simulateDeal.Pressed += DealSimulatedHand;
+        _simulateReset.Pressed += ClearSimulatedHand;
         _overlayToggle.Toggled += OnOverlayToggled;
         _searchBar.QueryChanged += OnSearchChanged;
         _refreshTimer.Timeout += RefreshPresentation;
@@ -318,6 +341,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private void OnIncludeHandToggled(NTickbox tickbox)
     {
         AllCardsSession.IncludeHandInReshuffle = tickbox.IsTicked;
+        // The reshuffle is a different pile now, so a hand dealt from the old one could
+        // hold cards the new one cannot reach.
+        AllCardsSession.SimulatedHand = null;
         Render();
     }
 
@@ -362,6 +388,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
             rows.Add(new[] { _drawDecrease, _drawReset, _drawIncrease });
             rows.Add(new[] { _targetDecrease, _targetIncrease });
             rows.Add(new Control[] { _selectionReset });
+            // Reset is only in the chain while it is on screen; a hidden control cannot
+            // take focus, and naming one would leave a dead step in the run.
+            rows.Add(_simulateResetRoot.Visible
+                ? new Control[] { _simulateDeal, _simulateReset }
+                : new Control[] { _simulateDeal });
         }
         rows.Add(new Control[] { _overlayToggle });
         rows.Add(new Control[] { _combineToggle });
@@ -604,6 +635,17 @@ internal sealed class AllCardsPileScreenView : IDisposable
     /// </summary>
     private List<GridSection> BuildSections()
     {
+        // A dealt hand replaces the piles rather than sitting alongside them: the point
+        // is to see the hand on its own, and a marker says plainly that it is not real.
+        if (AllCardsSession.SimulatedHand is { } simulated)
+            return
+            [
+                new(
+                    Shown(simulated.Cards),
+                    "Simulated Draw",
+                    DescribeSimulation(simulated)),
+            ];
+
         var sections = new List<GridSection> { new(Shown(_pools.Draw), null, null) };
         var reshuffle = Shown(_pools.Reshuffle);
         if (reshuffle.Count > 0)
@@ -629,6 +671,91 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
     private List<CardModel> Shown(IEnumerable<CardModel> pile) =>
         Sort(pile).Where(Matches).ToList();
+
+    /// <summary>
+    /// Deal a hand from the current draw count and show it in place of the piles.
+    /// Dealing again re-deals from the same board, which is the point: one hand says
+    /// little, and a dozen say what the percentages mean.
+    /// </summary>
+    private void DealSimulatedHand()
+    {
+        AllCardsSession.SimulatedHand = SimulatedHand.Deal(_pools, _chosenDrawCount);
+        _dealPending = true;
+        Render();
+    }
+
+    /// <summary>
+    /// Turn the cards over one after another, the way a hand is dealt.
+    ///
+    /// The layout rewrites every holder's position on each refresh, so the animation
+    /// works in scale and transparency instead — the two things it leaves alone. It
+    /// runs on the first layout that actually has holders, because the grid builds
+    /// them after the cards are handed to it, and never on the way back to the real
+    /// piles: those cards were not dealt.
+    /// </summary>
+    private void AnimateDealIfPending(IReadOnlyDictionary<int, NCardHolder> bySlot)
+    {
+        if (!_dealPending || bySlot.Count == 0)
+            return;
+        if (AllCardsSession.SimulatedHand == null)
+        {
+            _dealPending = false;
+            return;
+        }
+        _dealPending = false;
+
+        const float step = 0.06f;
+        const float duration = 0.24f;
+        var order = 0;
+        foreach (var slot in bySlot.Keys.OrderBy(key => key))
+        {
+            var holder = bySlot[slot];
+            holder.Scale = Vector2.One * 0.72f;
+            holder.Modulate = new Color(1, 1, 1, 0);
+            var delay = order * step;
+            var tween = holder.CreateTween().SetParallel();
+            tween.TweenProperty(holder, "scale", Vector2.One, duration)
+                .SetDelay(delay)
+                .SetTrans(Tween.TransitionType.Back)
+                .SetEase(Tween.EaseType.Out);
+            tween.TweenProperty(holder, "modulate:a", 1f, duration).SetDelay(delay);
+            order++;
+        }
+    }
+
+    private void ClearSimulatedHand()
+    {
+        AllCardsSession.SimulatedHand = null;
+        Render();
+    }
+
+    /// <summary>
+    /// Reset only exists while there is a hand to put away. Its arrival and departure
+    /// change which rows the gamepad can reach, so the shelf is rewired when it moves —
+    /// but only then, since this runs on every refresh.
+    /// </summary>
+    private void UpdateSimulationControls()
+    {
+        var simulated = AllCardsSession.SimulatedHand;
+        _simulateNote.Text = simulated == null
+            ? string.Empty
+            : $"Showing {simulated.Cards.Count} dealt " +
+              (simulated.Cards.Count == 1 ? "card" : "cards");
+        if (_simulateResetRoot.Visible == (simulated != null))
+            return;
+        _simulateResetRoot.Visible = simulated != null;
+        WireShelfFocus();
+    }
+
+    /// <summary>
+    /// Where the dealt cards came from. Worth saying only when the draw pile ran out
+    /// part way, since that is the case the odds treat as two separate stages.
+    /// </summary>
+    private static string DescribeSimulation(SimulatedHand simulated) =>
+        simulated.FromReshuffle == 0
+            ? "One draw you could get, dealt at random"
+            : $"Dealt at random: {simulated.FromDrawPile} from the draw pile, " +
+              $"then {simulated.FromReshuffle} after the reshuffle";
 
     /// <summary>
     /// Which cards are in which pile, by identity rather than by name, so two copies of
@@ -719,6 +846,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
         NativeShelf.SetButtonState(
             _targetIncrease, enabled: selectedTotal > 0 && requiredHits < selectedTotal);
         NativeShelf.SetButtonState(_selectionReset, enabled: selectedTotal > 0);
+        NativeShelf.SetButtonState(
+            _simulateDeal, enabled: _pools.ReachableCount > 0 && _chosenDrawCount > 0);
+        UpdateSimulationControls();
 
         UpdateCalculator();
         RebuildOverlayText(selectedTotal, requiredHits, chance);
@@ -914,6 +1044,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             bySlot[slot] = holder;
         }
         WireGridFocus(bySlot, columns, slots.Count - 1);
+        AnimateDealIfPending(bySlot);
 
         for (var index = 0; index < markerSlots.Count; index++)
         {
@@ -1025,7 +1156,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _chosenDrawCount = Math.Clamp(
             _chosenDrawCount + delta, 0, _pools.ReachableCount);
         AllCardsSession.SetChosenDrawCount(_chosenDrawCount, _pools.NaturalDrawCount);
-        UpdateAnalysis();
+        AfterDrawCountChanged();
     }
 
     private void ChangeTargetCount(int delta)
@@ -1041,7 +1172,22 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _pools = DrawPools.Resolve(_player);
         _chosenDrawCount = _pools.NaturalDrawCount;
         AllCardsSession.ClearChosenDrawCount();
-        UpdateAnalysis();
+        AfterDrawCountChanged();
+    }
+
+    /// <summary>
+    /// A dealt hand holds exactly the number of cards it was dealt at, so changing that
+    /// number puts it away rather than leaving a hand of the wrong size on screen.
+    /// </summary>
+    private void AfterDrawCountChanged()
+    {
+        if (AllCardsSession.SimulatedHand == null)
+        {
+            UpdateAnalysis();
+            return;
+        }
+        AllCardsSession.SimulatedHand = null;
+        Render();
     }
 
     private static List<CardModel> Sort(IEnumerable<CardModel> cards) =>

@@ -27,9 +27,6 @@ internal sealed class NativeShelf : IDisposable
     private const float ModuleSeparation = 4f;
     private const float ModuleSpacing = 18f;
     private const float BodyIndent = 8f;
-
-    /// <summary>Usable width inside a module body, after the margins and the indent.</summary>
-    private const float BodyWidth = Width - Margin * 2 - BodyIndent;
     private const float SelectedOutlineBleed = 5f;
 
     /// <summary>Sized for the longest toggle label, so none of them has to shrink.</summary>
@@ -44,8 +41,6 @@ internal sealed class NativeShelf : IDisposable
     private const string TypeTickboxScene = "screens/card_library/card_type_tickbox";
     private const string CardLibraryScene = "screens/card_library/card_library";
     private const string HoverTipScene = "ui/hover_tip";
-    private const string SeparatorScene =
-        "screens/daily_run/daily_run_leaderboard_separator";
 
     private readonly MegaLabel _fontSource;
     private readonly TextureRect _buttonTextureSource;
@@ -226,17 +221,6 @@ internal sealed class NativeShelf : IDisposable
     }
 
     /// <summary>
-    /// A centred name for one block inside a module body, in the colour the module
-    /// headers use. For a module that holds more than one thing.
-    /// </summary>
-    public MegaLabel AddSubHeading(VBoxContainer parent, string text, int fontSize = 19)
-    {
-        var label = AddCaption(parent, text, fontSize);
-        label.AddThemeColorOverride("font_color", HeaderColor);
-        return label;
-    }
-
-    /// <summary>
     /// The Card Library's search bar, text field and clear button together.
     ///
     /// It is built inline in the library's own scene rather than being a scene of its
@@ -333,34 +317,6 @@ internal sealed class NativeShelf : IDisposable
         row.Controls.AddChild(increase.Root);
 
         return new ShelfStepper(row.Root, decrease.Input, value.Label, increase.Input);
-    }
-
-    /// <summary>A fixed vertical gap, for separating blocks inside one module body.</summary>
-    public static void AddGap(VBoxContainer parent, float height)
-    {
-        parent.AddChild(new Control
-        {
-            Name = "Gap",
-            CustomMinimumSize = new Vector2(0, height),
-        });
-    }
-
-    /// <summary>
-    /// The game's own horizontal rule, taken from the daily run leaderboard: a two
-    /// pixel line over a soft shadow. Parts two blocks that share one module.
-    /// </summary>
-    public static Control AddSeparator(VBoxContainer parent, float padding = 10f)
-    {
-        AddGap(parent, padding);
-        var separator = SceneHelper.Instantiate<Control>(SeparatorScene);
-        separator.Name = "Separator";
-        // Half the body, centred: a full-width rule reads as the end of the module
-        // rather than as a join between two blocks inside it.
-        separator.CustomMinimumSize = new Vector2(BodyWidth * 0.5f, 2);
-        separator.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
-        parent.AddChild(separator);
-        AddGap(parent, padding);
-        return separator;
     }
 
     /// <summary>

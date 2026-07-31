@@ -32,6 +32,13 @@ internal static class AllCardsSession
     /// <summary>The cards the player picked, by instance.</summary>
     public static HashSet<CardModel> SelectedCards { get; } = [];
 
+    /// <summary>
+    /// A hand the player dealt themselves, shown in place of the real piles. Null while
+    /// the grid is showing what is actually there. Belongs to one board for the same
+    /// reason a selection does — see <see cref="SyncToPiles" />.
+    /// </summary>
+    public static SimulatedHand? SimulatedHand { get; set; }
+
     /// <summary>How many of the selection the hand needs.</summary>
     public static int TargetHits { get; set; }
 
@@ -102,6 +109,7 @@ internal static class AllCardsSession
         _combat = combat;
         SelectedCards.Clear();
         TargetHits = 0;
+        SimulatedHand = null;
         ClearChosenDrawCount();
         // The deck changes between fights, so the calculator reseeds from the new one.
         CalculatorSeeded = false;
@@ -123,6 +131,9 @@ internal static class AllCardsSession
         _pileFingerprint = fingerprint;
         SelectedCards.Clear();
         TargetHits = 0;
+        // A dealt hand was dealt from these piles. Once they move it is a hand from a
+        // board that no longer exists, which is worse than no hand at all.
+        SimulatedHand = null;
     }
 
     public static void SetChosenDrawCount(int chosen, int natural)

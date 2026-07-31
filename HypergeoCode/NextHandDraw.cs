@@ -53,29 +53,11 @@ internal sealed record NextHandDraw(int Count, IReadOnlyList<string> Modifiers)
             .Distinct()
             .ToList();
 
-        // Pendulum draws in AfterPlayerTurnStart instead of changing the hand draw, so
-        // ModifyHandDraw never sees it. Its cards still land in the same hand.
-        var desired = Math.Max(0, (int)modified) + PendulumDraw(player, names);
+        var desired = Math.Max(0, (int)modified);
         var capacity = Math.Max(0, CardPile.MaxCardsInHand - retainedCards);
         if (desired > capacity)
             names.Add("Hand capacity");
         return new NextHandDraw(Math.Min(capacity, desired), names);
-    }
-
-    private static int PendulumDraw(Player player, List<string> names)
-    {
-        var total = 0;
-        foreach (var relic in player.Relics)
-        {
-            if (relic is not Pendulum pendulum)
-                continue;
-            var turns = pendulum.DynamicVars["Turns"].IntValue;
-            if (turns <= 0 || (pendulum.TurnsSeen + 1) % turns != 0)
-                continue;
-            total += pendulum.DynamicVars.Cards.IntValue;
-            names.Add(pendulum.Title.GetRawText());
-        }
-        return total;
     }
 
     private static string? DisplayName(AbstractModel model) => model switch
@@ -104,6 +86,8 @@ internal sealed record NextHandDraw(int Count, IReadOnlyList<string> Modifiers)
             IntField(typeof(Pocketwatch), "LastTurn");
         private static readonly FieldInfo? PollinousTurnsSeen =
             IntField(typeof(PollinousCore), "turnsSeen");
+        private static readonly FieldInfo? PendulumTurnsSeen =
+            IntField(typeof(Pendulum), "turnsSeen");
         private static readonly FieldInfo? AmountOnTurnStart =
             IntField(typeof(PowerModel), "amountOnTurnStart");
 
@@ -127,6 +111,18 @@ internal sealed record NextHandDraw(int Count, IReadOnlyList<string> Modifiers)
                     // BeforeHandDraw ticks this immediately before ModifyHandDraw reads it.
                     case PollinousCore core:
                         Shift(core, PollinousTurnsSeen, core.TurnsSeen + 1);
+                        break;
+                    // Pendulum counts the same way but wraps, and pays out on the wrap:
+                    // BeforeHandDraw sets TurnsSeen = (TurnsSeen + 1) % Turns, and its
+                    // ModifyHandDraw adds cards only when that landed on zero. Read
+                    // without the tick it pays out a turn early — on a fresh Pendulum
+                    // showing 0 rather than on the 2 that is about to wrap.
+                    case Pendulum pendulum
+                        when pendulum.DynamicVars["Turns"].IntValue is > 0 and var turns:
+                        Shift(
+                            pendulum,
+                            PendulumTurnsSeen,
+                            (pendulum.TurnsSeen + 1) % turns);
                         break;
                 }
 
