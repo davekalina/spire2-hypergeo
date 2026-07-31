@@ -24,8 +24,17 @@ internal static class InputSettingsPatch
     /// a returning one, and a reset alike.
     /// </summary>
     [HarmonyPostfix]
-    [HarmonyPatch("DefaultKeyboardInputMap", MethodType.Getter)]
-    private static void AfterDefaultKeyboardInputMap(
+    [HarmonyPatch("DefaultHotkeyInputMap", MethodType.Getter)]
+    private static void AfterDefaultHotkeyInputMap(
+        Dictionary<StringName, Key> __result) =>
+        __result[AllCardsHotkey.Action] = AllCardsHotkey.DefaultKey;
+
+    /// <summary>
+    /// Keyboard-only mode keeps a second set of bindings, so the default belongs in both.
+    /// </summary>
+    [HarmonyPostfix]
+    [HarmonyPatch("DefaultKbOnlyInputMap", MethodType.Getter)]
+    private static void AfterDefaultKbOnlyInputMap(
         Dictionary<StringName, Key> __result) =>
         __result[AllCardsHotkey.Action] = AllCardsHotkey.DefaultKey;
 
@@ -74,7 +83,9 @@ internal static class InputSettingsEntryPatch
     {
         if (__instance.InputName?.ToString() != AllCardsHotkey.Action)
             return;
-        __instance.GetNode<MegaRichTextLabel>("%InputLabel").Text =
+        // A MegaLabel since 0.110; it was a MegaRichTextLabel before, and asking for the
+        // wrong one throws rather than returning null.
+        __instance.GetNode<MegaLabel>("%InputLabel").Text =
             AllCardsHotkey.SettingsTitle;
     }
 }

@@ -105,7 +105,7 @@ internal sealed class AllCardsScreenView : IDisposable
     /// </summary>
     private void ShowHoverTip()
     {
-        var key = NInputManager.Instance?.GetShortcutKey(AllCardsHotkey.Action) ??
+        var key = NInputManager.Instance?.GetMKbHotkey(AllCardsHotkey.Action) ??
                   Key.None;
         var shortcut = key == Key.None ? "unbound" : key.ToString();
         var tipSet = NHoverTipSet.CreateAndShow(

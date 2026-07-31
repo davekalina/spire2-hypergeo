@@ -193,6 +193,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         // The shelf owns the readout; the native strip would only repeat it.
         _bottomLabel.Visible = false;
         InsetGridForShelf();
+        LiftBackButton();
         ApplyShelfMode();
         TrackShelfFocus();
         _grid.HolderPressed += OnHolderPressed;
@@ -550,6 +551,20 @@ internal sealed class AllCardsPileScreenView : IDisposable
         var scrollContainer = _grid.GetNode<Control>("%ScrollContainer");
         scrollContainer.OffsetLeft = 50f;
         scrollContainer.OffsetRight = -150f;
+    }
+
+    /// <summary>
+    /// The back button sits in the same corner as the shelf's toggles, and the toggles
+    /// have grown up into it. It moves up to clear them. The screen is built fresh on
+    /// every open, so this cannot stack up.
+    /// </summary>
+    private void LiftBackButton()
+    {
+        const float lift = 32f;
+        if (_screen.GetNodeOrNull<Control>("BackButton") is not { } backButton)
+            return;
+        backButton.OffsetTop -= lift;
+        backButton.OffsetBottom -= lift;
     }
 
     private void Render()

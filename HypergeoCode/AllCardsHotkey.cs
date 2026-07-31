@@ -44,7 +44,11 @@ internal static class AllCardsHotkey
         if (!InputMap.HasAction(Action))
             InputMap.AddAction(Action);
 
-        AddToRemappable(NInputManager.remappableKeyboardInputs);
+        // Three lists since 0.110: the game split keyboard bindings into a
+        // mouse-and-keyboard set and a keyboard-only set, each with its own column in
+        // Settings. The shortcut belongs in every one of them.
+        AddToRemappable(NInputManager.remappableMKbInputs);
+        AddToRemappable(NInputManager.remappableKbOnlyInputs);
         AddToRemappable(NInputManager.remappableControllerInputs);
         AddSettingsRowTitle();
     }
