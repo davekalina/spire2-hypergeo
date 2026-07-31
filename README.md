@@ -272,3 +272,12 @@ v0.7.0 corrected the draw-count prediction. Every effect listed under
 **Predicting the draw count** was previously read mid-turn, so Pocketwatch did
 not break when its threshold was passed, Pendulum and Draw Cards Next Turn were
 missed outright, and Pollinous Core was a turn behind.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+That covers this mod's own source. It does not cover Slay the Spire 2, which is the
+property of Mega Crit. The mod compiles against the game's assemblies and loads the
+game's own scenes and textures at runtime from the player's installed copy; none of
+that is redistributed here.
