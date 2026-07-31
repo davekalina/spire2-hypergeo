@@ -27,6 +27,9 @@ internal sealed class NativeShelf : IDisposable
     private const float ModuleSeparation = 4f;
     private const float ModuleSpacing = 18f;
     private const float BodyIndent = 8f;
+
+    /// <summary>Usable width inside a module body, after the margins and the indent.</summary>
+    private const float BodyWidth = Width - Margin * 2 - BodyIndent;
     private const float SelectedOutlineBleed = 5f;
 
     /// <summary>Sized for the longest toggle label, so none of them has to shrink.</summary>
@@ -41,6 +44,8 @@ internal sealed class NativeShelf : IDisposable
     private const string TypeTickboxScene = "screens/card_library/card_type_tickbox";
     private const string CardLibraryScene = "screens/card_library/card_library";
     private const string HoverTipScene = "ui/hover_tip";
+    private const string SeparatorScene =
+        "screens/daily_run/daily_run_leaderboard_separator";
 
     private readonly MegaLabel _fontSource;
     private readonly TextureRect _buttonTextureSource;
@@ -214,7 +219,20 @@ internal sealed class NativeShelf : IDisposable
         var label = CreateText(text, fontSize);
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        // Long text wraps rather than running off the edge of a 288 px shelf.
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         parent.AddChild(label);
+        return label;
+    }
+
+    /// <summary>
+    /// A centred name for one block inside a module body, in the colour the module
+    /// headers use. For a module that holds more than one thing.
+    /// </summary>
+    public MegaLabel AddSubHeading(VBoxContainer parent, string text, int fontSize = 19)
+    {
+        var label = AddCaption(parent, text, fontSize);
+        label.AddThemeColorOverride("font_color", HeaderColor);
         return label;
     }
 
@@ -243,16 +261,28 @@ internal sealed class NativeShelf : IDisposable
     }
 
     /// <summary>
-    /// A named value with a stepper: the label reads left, the controls sit right.
-    /// Tighter than a caption over a centred row, which matters when several stack up.
+    /// A named row of controls: the name reads left, the controls sit against the right
+    /// edge. Tighter than a caption over a centred row, which matters when several stack
+    /// up, and it keeps the name beside the number it belongs to.
+    ///
+    /// The caller fills <c>Controls</c>, so this is the one shape used for both the
+    /// calculator's steppers and the combat view's draw and hits rows.
     /// </summary>
-    public ShelfStepper AddStepperRow(
-        VBoxContainer parent, string label, string? hoverDescription = null)
+    public ShelfControlRow AddControlRow(
+        VBoxContainer parent,
+        string label,
+        int fontSize = 19,
+        int separation = 6,
+        string? hoverDescription = null)
     {
-        var row = new HBoxContainer { Name = $"{label}Stepper" };
-        row.AddThemeConstantOverride("separation", 4);
+        var row = new HBoxContainer
+        {
+            Name = $"{label}Row",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+        };
+        row.AddThemeConstantOverride("separation", separation);
 
-        var caption = CreateText(label, 15);
+        var caption = CreateText(label, fontSize);
         caption.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         caption.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         caption.HorizontalAlignment = HorizontalAlignment.Left;
@@ -270,15 +300,67 @@ internal sealed class NativeShelf : IDisposable
         }
         row.AddChild(caption);
 
+        // Anything qualifying the row goes under the controls rather than under the
+        // whole shelf, so it reads as belonging to the number it describes. The column
+        // shrinks to its widest child, which is the run of controls: text added here
+        // wraps and centres on them rather than stretching back under the name.
+        var column = new VBoxContainer
+        {
+            Name = "Column",
+            SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd,
+        };
+        column.AddThemeConstantOverride("separation", 2);
+        var controls = new HBoxContainer { Name = "Controls" };
+        controls.AddThemeConstantOverride("separation", separation);
+        column.AddChild(controls);
+        row.AddChild(column);
+
+        parent.AddChild(row);
+        return new ShelfControlRow(row, caption, controls, column);
+    }
+
+    /// <summary>A named value with a stepper, at the calculator's smaller size.</summary>
+    public ShelfStepper AddStepperRow(
+        VBoxContainer parent, string label, string? hoverDescription = null)
+    {
+        var row = AddControlRow(parent, label, 15, 4, hoverDescription);
+
         var decrease = CreateButton("−", 36);
         var value = CreateDisplay(string.Empty, 46);
         var increase = CreateButton("+", 36);
-        row.AddChild(decrease.Root);
-        row.AddChild(value.Root);
-        row.AddChild(increase.Root);
+        row.Controls.AddChild(decrease.Root);
+        row.Controls.AddChild(value.Root);
+        row.Controls.AddChild(increase.Root);
 
-        parent.AddChild(row);
-        return new ShelfStepper(row, decrease.Input, value.Label, increase.Input);
+        return new ShelfStepper(row.Root, decrease.Input, value.Label, increase.Input);
+    }
+
+    /// <summary>A fixed vertical gap, for separating blocks inside one module body.</summary>
+    public static void AddGap(VBoxContainer parent, float height)
+    {
+        parent.AddChild(new Control
+        {
+            Name = "Gap",
+            CustomMinimumSize = new Vector2(0, height),
+        });
+    }
+
+    /// <summary>
+    /// The game's own horizontal rule, taken from the daily run leaderboard: a two
+    /// pixel line over a soft shadow. Parts two blocks that share one module.
+    /// </summary>
+    public static Control AddSeparator(VBoxContainer parent, float padding = 10f)
+    {
+        AddGap(parent, padding);
+        var separator = SceneHelper.Instantiate<Control>(SeparatorScene);
+        separator.Name = "Separator";
+        // Half the body, centred: a full-width rule reads as the end of the module
+        // rather than as a join between two blocks inside it.
+        separator.CustomMinimumSize = new Vector2(BodyWidth * 0.5f, 2);
+        separator.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+        parent.AddChild(separator);
+        AddGap(parent, padding);
+        return separator;
     }
 
     /// <summary>
@@ -591,10 +673,17 @@ internal sealed class NativeShelf : IDisposable
     {
         input.Disabled = !enabled;
         if (input.GetParent()?.GetNodeOrNull<CanvasItem>("NativeVisual") is { } visual)
-            visual.SelfModulate = enabled
-                ? new Color(0.86f, 0.86f, 0.86f, 1)
-                : new Color(0.52f, 0.52f, 0.52f, 0.85f);
+            SetVisualState(visual, enabled);
     }
+
+    /// <summary>
+    /// Dim a read-only display to match the disabled buttons beside it. Shares its
+    /// colours with <see cref="SetButtonState" /> so a stepper greys out as one piece.
+    /// </summary>
+    public static void SetVisualState(CanvasItem visual, bool enabled) =>
+        visual.SelfModulate = enabled
+            ? new Color(0.86f, 0.86f, 0.86f, 1)
+            : new Color(0.52f, 0.52f, 0.52f, 0.85f);
 
     private static void SetFocusOutline(Control visual, bool visible)
     {
@@ -627,6 +716,11 @@ internal sealed class NativeShelf : IDisposable
     }
     internal sealed record ShelfStepper(
         HBoxContainer Root, Button Decrease, MegaLabel Value, Button Increase);
+    internal sealed record ShelfControlRow(
+        HBoxContainer Root,
+        MegaLabel Label,
+        HBoxContainer Controls,
+        VBoxContainer Column);
     internal sealed record ShelfRow(HBoxContainer Root, MegaLabel Label, MegaLabel Value);
     internal sealed record ShelfButton(Control Root, Button Input, MegaLabel Label);
     internal sealed record ShelfDisplay(Control Root, Control Visual, MegaLabel Label);

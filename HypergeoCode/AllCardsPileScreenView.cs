@@ -41,7 +41,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly Button _targetDecrease;
     private readonly Button _targetIncrease;
     private readonly Button _selectionReset;
-    private readonly HBoxContainer _targetRow;
+    private readonly Control _targetCountVisual;
     private readonly HBoxContainer _resetRow;
     private readonly MegaLabel _targetCountLabel;
     private readonly NativeShelf.ShelfRow _needRow;
@@ -103,7 +103,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         _searchBar = _shelf.AddSearchBar(_shelf.Top);
 
-        var draw = _shelf.AddModule(_shelf.Top, "Draw");
+        // Draw and Hits are the two numbers the question is asked in terms of, so they
+        // share a module rather than heading one each. Both stack down the middle of
+        // the shelf: the name, its controls, then whatever qualifies it.
+        var parameters = _shelf.AddModule(_shelf.Top, "Parameters");
+
+        _shelf.AddSubHeading(parameters.Body, "Draw");
         var drawRow = NativeShelf.CreateControlRow();
         var drawDecreaseControl = _shelf.CreateButton("−", 48);
         var drawCountControl = _shelf.CreateButton(
@@ -119,11 +124,13 @@ internal sealed class AllCardsPileScreenView : IDisposable
         drawRow.AddChild(drawDecreaseControl.Root);
         drawRow.AddChild(drawCountControl.Root);
         drawRow.AddChild(drawIncreaseControl.Root);
-        draw.Body.AddChild(drawRow);
-        _shelf.AddCaption(draw.Body, "cards next hand");
-        _drawNote = _shelf.AddNote(draw.Body, string.Empty, 13);
+        parameters.Body.AddChild(drawRow);
+        _shelf.AddCaption(parameters.Body, "cards next hand");
+        _drawNote = _shelf.AddNote(parameters.Body, string.Empty, 13);
 
-        var selection = _shelf.AddModule(_shelf.Top, "Hits");
+        NativeShelf.AddSeparator(parameters.Body);
+
+        _shelf.AddSubHeading(parameters.Body, "Hits");
         var targetRow = NativeShelf.CreateControlRow();
         var targetDecreaseControl = _shelf.CreateButton("−", 48);
         var targetCountControl = _shelf.CreateDisplay(string.Empty, 52);
@@ -134,9 +141,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
         targetRow.AddChild(targetDecreaseControl.Root);
         targetRow.AddChild(targetCountControl.Root);
         targetRow.AddChild(targetIncreaseControl.Root);
-        selection.Body.AddChild(targetRow);
-        _targetRow = targetRow;
-        _hintLabel = _shelf.AddCaption(selection.Body, string.Empty);
+        parameters.Body.AddChild(targetRow);
+        _targetCountVisual = targetCountControl.Visual;
+        _hintLabel = _shelf.AddCaption(parameters.Body, string.Empty);
 
         var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
         _queryNote = _shelf.AddNote(result.Body, string.Empty);
@@ -151,7 +158,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _resetRow.AddChild(resetControl.Root);
         result.Body.AddChild(_resetRow);
 
-        _combatModules = [draw.Root, selection.Root, result.Root];
+        _combatModules = [parameters.Root, result.Root];
         AddCalculatorModules();
 
         _overlayToggle = _shelf.AddToggle(
@@ -684,12 +691,13 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         _drawCountLabel.Text = _chosenDrawCount.ToString();
         _targetCountLabel.Text = requiredHits.ToString();
-        // With nothing picked the row is a prompt, not a control: a stepper that can
-        // only read zero of zero is noise.
+        // With nothing picked there is nothing to ask for, so the stepper greys out
+        // rather than vanishing: the row keeps its shape and the prompt underneath
+        // says what would bring it back.
         _hintLabel.Text = selectedTotal == 0
             ? "Select cards in the grid."
             : $"of {selectedTotal} selected";
-        _targetRow.Visible = selectedTotal > 0;
+        NativeShelf.SetVisualState(_targetCountVisual, enabled: selectedTotal > 0);
         _resetRow.Visible = selectedTotal > 0;
 
         _drawNote.Text = DescribeDrawCount();
@@ -725,7 +733,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private string DescribeDrawCount()
     {
         if (_chosenDrawCount != _pools.NaturalDrawCount)
-            return $"set by hand — next turn deals {_pools.NaturalDrawCount}";
+            return $"(manual - next turn draws {_pools.NaturalDrawCount})";
         return _pools.DrawModifiers.Count == 0
             ? string.Empty
             : string.Join(", ", _pools.DrawModifiers);
