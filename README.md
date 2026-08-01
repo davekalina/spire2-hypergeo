@@ -29,41 +29,13 @@ Cards a retain effect keeps in hand are excluded from both stages and always
 read 0%. They are not reshuffled until they are played and leave the hand, so no
 upcoming draw can reach them.
 
-## Predicting the draw count
-
-The draw count is what the *next* turn will deal, not what this one did. The
-game's draw hooks answer for the turn they are asked in, and several effects roll
-per-turn bookkeeping forward at the turn boundary, so asking them mid-turn
-describes the hand already in hand. `NextHandDraw` advances that bookkeeping
-across the call and restores it immediately.
-
-| Effect | Why the mid-turn answer is wrong |
-| --- | --- |
-| Ring of the Snake, Bag of Preparation, Big Mushroom, Booming Conch | Only apply on turn 1, so they must be read at turn + 1 |
-| Ring of the Drake | Applies within a turn window |
-| Pocketwatch | Reads *last* turn's cards played; the roll happens in `BeforeSideTurnStart`, so this turn's count is what next turn will see. Playing past its threshold breaks it immediately |
-| Pollinous Core | `BeforeHandDraw` ticks its turn counter just before the draw reads it |
-| Draw Cards Next Turn | Gated on `AmountOnTurnStart`, which is still zero on the turn the power is applied |
-| Pendulum | Draws in `AfterPlayerTurnStart` instead of modifying the hand draw, so the hook never reports it |
-| Fiddle | Applies in the late `ModifyHandDrawLate` pass |
-
-Clarity, Demesne, Machine Learning, Tools of the Trade, Tyranny, Mind Rot,
-Pael's Blood, and Snecko Eye read their current amount and are not decayed until
-after the draw, so they need no adjustment.
-
-The shelf names whichever of these moved the count, so the number can be checked
-rather than trusted.
-
-`DrawPools` builds all of this from live combat state, and every screen resolves
-its odds through it, so the piles, the draw count, and the reshuffle model
-cannot diverge between screens.
-
 ## All Cards screen
 
-During combat, press **W** (rebindable in Settings → Input) or use the **ALL**
-pile button beside Draw to open the mod's main screen: a Card Library shelf beside one continuous grid of every card the next
-hand could reach, in draw order. Like the Card Library, it draws over the run's
-top bar and relic inventory rather than under them.
+During combat, press **W** (rebindable in Settings → Input) or use the **%** pile
+button beside Draw to open the mod's main screen: a Card Library shelf beside one
+continuous grid of every card the next hand could reach, in draw order. Like the
+Card Library, it draws over the run's top bar and relic inventory rather than
+under them.
 
 The grid runs the draw pile, then a card-sized **Reshuffle — Discard Pile +
 Cards in Hand →** marker, then the reshuffle pool itself. The discard pile and
@@ -117,112 +89,6 @@ The shelf holds the whole query and its result:
   tip explains the screen. That tip is `HelpText` in
   `HypergeoCode/AllCardsPileScreenView.cs`.
 
-### The shortcut
-
-**W** opens the screen and closes it again, and **Settings → Input** carries a
-**View All Cards** row for rebinding it to another key or to a controller button.
-
-The shortcut joins the game's input system rather than working around it.
-`NInputManager` holds the action → key and action → controller-button
-dictionaries, watches raw input, and synthesises an action event when a binding
-matches; Settings → Input builds one row per action from two lists of remappable
-actions and edits those same dictionaries. `AllCardsHotkey` registers the action
-with Godot — deliberately with no key event of its own, since a second input
-source would fire the shortcut twice and ignore any rebinding — and adds it to
-both lists so the row appears and accepts either kind of input.
-
-`InputSettingsPatch` supplies the rest:
-
-- The keyboard default goes into `DefaultKeyboardInputMap`, which is the base
-  every saved mapping is layered onto and exactly what **Reset to Default**
-  restores, so one patch covers a fresh profile, a returning one, and a reset.
-  A different default is a one-line change to `AllCardsHotkey.DefaultKey`.
-- The row's label is written directly, because every other row reads its title
-  from the game's localisation tables and a mod cannot add to those.
-- The first controller binding is made safe. Rebinding normally *swaps* buttons,
-  handing the displaced input whatever button the rebound action used to have —
-  but the game's defaults already spend every controller button, so this
-  shortcut starts unbound and has nothing to hand over. Binding it frees the
-  button instead, leaving whatever held it unbound and visible in the same list.
-
-Combat already uses A for the draw pile, S for the discard pile, D for the deck,
-X for the exhaust pile, M for the map, E to accept, Space to peek, and 1-0 to
-select cards, so W is free and sits in the same cluster as the pile keys.
-
-### Controllers, and Steam Input
-
-A press reaches a game action in three hops:
-
-```text
-button → [Steam binding] → Steam action → Controller.* input → game action
-```
-
-Steam owns only the first hop. Its action set is fixed at the fifteen buttons
-declared in `<game>/controller_config/game_actions_2868840.vdf`, which a mod
-cannot add to, and while Steam Input is active the game disables its own
-controller rebinding entirely — `ShouldAllowControllerRebinding` returns false.
-That is why a binding set in game appears to be ignored.
-
-So instead of chasing bindings, **Settings → Mod Settings → Hypergeometric Draw
-Odds** offers **Override Draw Pile button**, off by default. It changes what the
-Draw Pile button *does* rather than what it is bound to: every route into that
-button — a keyboard key, a controller button, a Steam Input action, or a mouse
-click — arrives at one method, so overriding there covers all of them at once
-and needs no input map rewritten. Every binding is left alone and Settings keeps
-showing them; only the destination changes. It is a fair trade only because the
-All Cards screen shows the draw pile and then some, which is why it is opt-in.
-The setting applies immediately and is remembered in
-`user://hypergeo_settings.cfg`.
-
-Without that setting the shortcut starts unbound on a controller and can be
-bound to any button from Settings → Input, at the cost of whatever action holds
-that button.
-
-### Controller navigation
-
-The shelf's controls are focusable, so a controller can reach them: press left
-from the leftmost column of cards and focus lands on the shelf. Focus wears the
-same outline the native tickboxes use for selection, plus the scale nudge the
-Card Library's sorter bars give. A stepper with nothing left to give drops out
-of the focus graph rather than stopping travel on a dead control.
-
-Every neighbour is named explicitly, the way the Card Library wires its own
-sidebar. Godot's automatic search cannot be used here: it looks across the whole
-viewport, so a press towards the shelf finds the run's relic inventory sitting
-behind the screen rather than the shelf itself. The shelf's own edges point back
-at their own control, which parks focus rather than letting it escape.
-
-Both ends of the gap between shelf and grid are reapplied from the refresh tick,
-because neither can be wired once and left: the grid rebuilds its holders, and
-which card sits at the left edge changes with the column count. Leaving the grid
-returns to whichever shelf control was last used; leaving the shelf enters the
-grid beside whatever row was being looked at, rather than jumping to the top.
-
-The rows between the search bar and the toggles are swapped wholesale when Rawdog
-Mode is toggled, so the chain is rebuilt then.
-
-### What the screen remembers
-
-The game builds a fresh screen every time the pile view opens, so `AllCardsSession`
-holds what would otherwise be discarded on close:
-
-- **Show Odds on Cards** and **Rawdog Mode** are display preferences and last as
-  long as the game does.
-- The **calculator's numbers** and any **hand-picked draw count** belong to one
-  combat and are dropped when a different combat begins.
-- The **selection** belongs to one hand. It survives closing and reopening the
-  screen, and nothing else.
-
-A selection is a question about one particular board — these cards, in these
-piles. Playing a card or drawing a hand asks a different question, so the screen
-fingerprints which cards are in which pile and clears the selection the moment
-that changes; carrying the old answer over would report odds for a board that no
-longer exists. Order within a pile is ignored, since a shuffle moves no card
-between piles and changes no odds.
-
-A hand-picked draw count is kept only while the real next-turn draw is unchanged;
-once the situation moves, the honest number wins.
-
 ## Build
 
 ```powershell
@@ -268,10 +134,10 @@ v0.6.0 rebuilt the All Cards screen around the Card Library shelf and folded the
 hand into the reshuffle pool. Before that, cards in hand were absent from the
 screen and from the odds entirely.
 
-v0.7.0 corrected the draw-count prediction. Every effect listed under
-**Predicting the draw count** was previously read mid-turn, so Pocketwatch did
-not break when its threshold was passed, Pendulum and Draw Cards Next Turn were
-missed outright, and Pollinous Core was a turn behind.
+v0.7.0 corrected the draw-count prediction. The effects that change how much the
+next hand draws were previously read mid-turn, so Pocketwatch did not break when
+its threshold was passed, Pendulum and Draw Cards Next Turn were missed
+outright, and Pollinous Core was a turn behind.
 
 ## Licence
 
