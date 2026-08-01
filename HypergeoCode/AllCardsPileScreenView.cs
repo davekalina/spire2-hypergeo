@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -387,9 +387,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
         {
             rows.Add(new[] { _drawDecrease, _drawReset, _drawIncrease });
             rows.Add(new[] { _targetDecrease, _targetIncrease });
-            rows.Add(new Control[] { _selectionReset });
-            // Reset is only in the chain while it is on screen; a hidden control cannot
-            // take focus, and naming one would leave a dead step in the run.
+            // A Reset is in the chain only while it is on screen. Naming a hidden
+            // control is worse than leaving a gap: Godot cannot focus it, so it falls
+            // back to searching the viewport and lands on the combat behind.
+            if (_resetRow.Visible)
+                rows.Add(new Control[] { _selectionReset });
             rows.Add(_simulateResetRoot.Visible
                 ? new Control[] { _simulateDeal, _simulateReset }
                 : new Control[] { _simulateDeal });
@@ -402,6 +404,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         NativeShelf.WireFocusRows(rows);
         _shelfRows = rows;
+        SealScreenFocus();
     }
 
     /// <summary>
@@ -471,6 +474,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
                 leftEdge.Add(holder);
         }
         WireShelfSeam(leftEdge);
+        // Holders arrive and are recycled as the grid rebuilds, so the sweep repeats
+        // here rather than only when the shelf is wired.
+        SealScreenFocus();
     }
 
     /// <summary>
@@ -480,6 +486,93 @@ internal sealed class AllCardsPileScreenView : IDisposable
     /// card sits at the left edge changes with the column count, so both ends are
     /// reapplied from the refresh tick.
     /// </summary>
+    /// <summary>
+    /// Show or hide a control without dropping focus into the combat behind the screen.
+    ///
+    /// Godot releases focus when the control holding it is hidden, and the next input
+    /// arriving with nothing focused starts the same viewport-wide search that finds
+    /// the relic bar. Both Reset buttons hide themselves the moment they are pressed —
+    /// pressing one clears the very thing that put it on screen — so this is the
+    /// ordinary path through the screen rather than an edge case. Focus moves first,
+    /// while there is still something to move it from.
+    /// </summary>
+    private void SetVisibleKeepingFocus(Control control, bool visible)
+    {
+        if (control.Visible == visible)
+            return;
+        if (!visible && HoldsFocus(control))
+            GrabFirstAvailable(_simulateDeal, _drawReset);
+        control.Visible = visible;
+    }
+
+    private static bool HoldsFocus(Control control) =>
+        control.GetViewport()?.GuiGetFocusOwner() is { } owner &&
+        (owner == control || control.IsAncestorOf(owner));
+
+    private void GrabFirstAvailable(params Control[] candidates)
+    {
+        foreach (var candidate in candidates)
+            if (GodotObject.IsInstanceValid(candidate) &&
+                candidate.IsVisibleInTree() &&
+                candidate.FocusMode != Control.FocusModeEnum.None)
+            {
+                candidate.GrabFocus();
+                return;
+            }
+        // Nothing in the shelf will take it; the first row always exists.
+        if (_shelfRows.Count > 0 && _shelfRows[0].Count > 0)
+            _shelfRows[0][0].GrabFocus();
+    }
+
+    /// <summary>
+    /// Leave nothing on this screen able to send focus off it.
+    ///
+    /// An empty focus neighbour is not a dead end in Godot: it falls back to a
+    /// geometric search across the whole viewport, and this screen is drawn over a
+    /// combat that is still there — so the search finds the relic bar behind it and
+    /// hands focus over. The controls the screen builds all name their four
+    /// neighbours; this covers everything else that happens to be focusable, the back
+    /// button and whatever the search bar and tickboxes carry inside them, by parking
+    /// an unset direction on the control itself. A direction with nowhere to go then
+    /// does nothing, which is the right answer at the edge of a screen.
+    ///
+    /// Cheap to repeat: once a neighbour is set it is never empty again, so later
+    /// passes only test and move on.
+    /// </summary>
+    private void SealScreenFocus()
+    {
+        if (!GodotObject.IsInstanceValid(_screen))
+            return;
+        foreach (var control in Focusable(_screen))
+        {
+            var self = control.GetPath();
+            if (control.FocusNeighborLeft.IsEmpty)
+                control.FocusNeighborLeft = self;
+            if (control.FocusNeighborRight.IsEmpty)
+                control.FocusNeighborRight = self;
+            if (control.FocusNeighborTop.IsEmpty)
+                control.FocusNeighborTop = self;
+            if (control.FocusNeighborBottom.IsEmpty)
+                control.FocusNeighborBottom = self;
+            // Tab order falls back to the same viewport-wide search.
+            if (control.FocusNext.IsEmpty)
+                control.FocusNext = self;
+            if (control.FocusPrevious.IsEmpty)
+                control.FocusPrevious = self;
+        }
+    }
+
+    private static IEnumerable<Control> Focusable(Node root)
+    {
+        foreach (var child in root.GetChildren())
+        {
+            if (child is Control { FocusMode: Control.FocusModeEnum.All } control)
+                yield return control;
+            foreach (var nested in Focusable(child))
+                yield return nested;
+        }
+    }
+
     private void WireShelfSeam(IReadOnlyList<NCardHolder> leftEdge)
     {
         if (leftEdge.Count == 0 || _shelfRows.Count == 0)
@@ -642,7 +735,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
             [
                 new(
                     Shown(simulated.Cards),
-                    "Simulated Draw",
+                    "Simulated\nDraw",
                     DescribeSimulation(simulated)),
             ];
 
@@ -710,11 +803,16 @@ internal sealed class AllCardsPileScreenView : IDisposable
         foreach (var slot in bySlot.Keys.OrderBy(key => key))
         {
             var holder = bySlot[slot];
-            holder.Scale = Vector2.One * 0.72f;
+            // A holder rests at SmallScale and only reaches Vector2.One while hovered,
+            // so the animation has to land on the former. Ending on the latter left
+            // every card sitting at hover size until the mouse passed over it and the
+            // game's own tween put it back.
+            var resting = holder.SmallScale;
+            holder.Scale = resting * 0.72f;
             holder.Modulate = new Color(1, 1, 1, 0);
             var delay = order * step;
             var tween = holder.CreateTween().SetParallel();
-            tween.TweenProperty(holder, "scale", Vector2.One, duration)
+            tween.TweenProperty(holder, "scale", resting, duration)
                 .SetDelay(delay)
                 .SetTrans(Tween.TransitionType.Back)
                 .SetEase(Tween.EaseType.Out);
@@ -743,7 +841,7 @@ internal sealed class AllCardsPileScreenView : IDisposable
               (simulated.Cards.Count == 1 ? "card" : "cards");
         if (_simulateResetRoot.Visible == (simulated != null))
             return;
-        _simulateResetRoot.Visible = simulated != null;
+        SetVisibleKeepingFocus(_simulateResetRoot, simulated != null);
         WireShelfFocus();
     }
 
@@ -825,7 +923,13 @@ internal sealed class AllCardsPileScreenView : IDisposable
             ? "Select cards in the grid."
             : $"of {selectedTotal} selected";
         NativeShelf.SetVisualState(_targetCountVisual, enabled: selectedTotal > 0);
-        _resetRow.Visible = selectedTotal > 0;
+        // Pressing Reset clears the selection, which is what was keeping Reset on
+        // screen. Focus has to leave before it goes, and the chain has to forget it.
+        if (_resetRow.Visible != selectedTotal > 0)
+        {
+            SetVisibleKeepingFocus(_resetRow, selectedTotal > 0);
+            WireShelfFocus();
+        }
 
         _drawNote.Text = DescribeDrawCount();
         _queryNote.Text = DescribeQuery(selectedTotal, requiredHits);
@@ -1062,10 +1166,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
             marker.Box.CustomMinimumSize = side;
             marker.Box.Size = side;
             marker.Box.Position = (cardSize - side) * 0.5f;
-            // The heading sits on the box's own rect, so it is centred on the frame the
-            // player sees rather than on the panel's shadow-shifted interior.
-            marker.Heading.Position = marker.Box.Position;
-            marker.Heading.Size = side;
+            // Place the frame; the heading is anchored to fill it and follows on its own.
+            // The tile's art fills its root, so the two share a centre and no nudge is
+            // needed to put the heading on the plaque.
+            marker.HeadingFrame.Position = marker.Box.Position;
+            marker.HeadingFrame.Size = side;
         }
         for (var index = markerSlots.Count; index < _markers.Count; index++)
             _markers[index].Root.Visible = false;

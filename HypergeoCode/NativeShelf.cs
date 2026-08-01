@@ -41,6 +41,8 @@ internal sealed class NativeShelf : IDisposable
     private const string TypeTickboxScene = "screens/card_library/card_type_tickbox";
     private const string CardLibraryScene = "screens/card_library/card_library";
     private const string HoverTipScene = "ui/hover_tip";
+    private const string MarkerTileScene =
+        "screens/main_menu/compendium_bottom_button";
 
     private readonly MegaLabel _fontSource;
     private readonly TextureRect _buttonTextureSource;
@@ -331,18 +333,20 @@ internal sealed class NativeShelf : IDisposable
     {
         var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
 
-        // The game's own hover tip panel, borrowed for its frame: a separator is a label
-        // for the run of cards after it, and this is the box the game puts labels in.
+        // The Compendium's bottom tile, borrowed for its plaque: a separator is a label
+        // for the run of cards after it, and this is a frame the game already uses to
+        // put a name under a picture.
         //
-        // Only the frame. Its own text nodes stay hidden and the heading is a sibling of
-        // the box rather than a child, because the panel sets a negative right and
-        // bottom margin so its shadow can hang past the frame — which drags everything
-        // inside it off-centre too. Centring on the box's own rect sidesteps all of it.
-        var box = SceneHelper.Instantiate<Control>(HoverTipScene);
+        // It is a button in the main menu and a label here, so its own text and icon
+        // stay hidden and it takes no focus. Its BgPanel fills the root exactly, which
+        // is why the heading can be centred on the root and land on the art — the hover
+        // tip panel this replaced set negative margins that put its frame somewhere
+        // else entirely, and no amount of arithmetic against it centred the text.
+        var box = SceneHelper.Instantiate<Control>(MarkerTileScene);
         box.Name = "MarkerBox";
-        box.GetNodeOrNull<Control>("%Title")?.Hide();
-        box.GetNodeOrNull<Control>("%Description")?.Hide();
-        box.GetNodeOrNull<Control>("%Icon")?.Hide();
+        box.FocusMode = Control.FocusModeEnum.None;
+        box.GetNodeOrNull<Control>("Label")?.Hide();
+        box.GetNodeOrNull<Control>("Icon")?.Hide();
         root.AddChild(box);
 
         var heading = CreateText(string.Empty, 22);
@@ -350,20 +354,47 @@ internal sealed class NativeShelf : IDisposable
         heading.AddThemeColorOverride("font_color", HeaderColor);
         heading.HorizontalAlignment = HorizontalAlignment.Center;
         heading.VerticalAlignment = VerticalAlignment.Center;
-        heading.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        // No wrapping. With it on, the label's minimum width collapses to a single
+        // pixel, and its minimum height becomes the height of the text wrapped one
+        // character per line — 306 px for a one-word heading. A control cannot be
+        // smaller than its minimum, so that height won every attempt to give the label
+        // the frame's 240, and the text centred in a box far taller than the one drawn.
+        heading.AutowrapMode = TextServer.AutowrapMode.Off;
         heading.MouseFilter = Control.MouseFilterEnum.Ignore;
-        root.AddChild(heading);
+        // The heading goes in a frame of its own, anchored to fill it, rather than
+        // being given a rect directly: a MegaLabel does not keep an assigned height —
+        // it reported 306 px tall after being set to 240 — and centring text in a box
+        // taller than the one drawn is what dropped it below the middle. Anchors are
+        // maintained by Godot against the parent's rect, so the label cannot drift
+        // from the frame no matter what it decides its own height should be.
+        var headingFrame = new Control
+        {
+            Name = "MarkerHeadingFrame",
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            ClipContents = true,
+        };
+        root.AddChild(headingFrame);
+        headingFrame.AddChild(heading);
+        heading.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
-        var marker = new ShelfMarker { Root = root, Box = box, Heading = heading };
+        var marker = new ShelfMarker
+        {
+            Root = root,
+            Box = box,
+            Heading = heading,
+            HeadingFrame = headingFrame,
+        };
         // Pass, not Stop: the marker sits in the card grid, which reads mouse events of
         // its own to drag-scroll, and swallowing them would make it a dead patch.
         box.MouseFilter = Control.MouseFilterEnum.Pass;
+        // A heading may be broken over two lines to sit better in the box; the tip
+        // wants the name as one line.
         box.MouseEntered += () => NHoverTipSet.CreateAndShow(
             box,
             NativeHoverTip.Create(
-                marker.Heading.Text,
+                marker.Heading.Text.Replace('\n', ' '),
                 marker.Description,
-                $"HypergeoSection:{marker.Heading.Text}"),
+                $"HypergeoSection:{marker.Heading.Text.Replace('\n', ' ')}"),
             HoverTipAlignment.Right);
         box.MouseExited += () => NHoverTipSet.Remove(box);
         return marker;
@@ -668,6 +699,9 @@ internal sealed class NativeShelf : IDisposable
         public required Control Root { get; init; }
         public required Control Box { get; init; }
         public required MegaLabel Heading { get; init; }
+
+        /// <summary>Sized to the drawn frame; the heading is anchored to fill it.</summary>
+        public required Control HeadingFrame { get; init; }
         public string Description { get; set; } = string.Empty;
     }
     internal sealed record ShelfStepper(
