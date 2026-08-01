@@ -1,0 +1,22 @@
+A hypergeometric distribution is a statistical method for calculating the probability of k successes in n draws from a finite population without replacement.
+
+In Spire terms: what are the odds I have weakness next turn? Can I kill in two? Should I break Pocketwatch to block an extra 3? What are the odds that I draw 3 Withers next turn with Fiddle and die?? 
+
+This mod exists to help you calculate the chance of getting specific cards in specific draws.
+
+Features include:
+
+- "All Cards" view from combat showing your draw pile, followed by the cards in your reshuffle (discard + cards in hand).
+- Hover tooltips showing the chance of drawing a specific card or any exact copy of that card.
+- Calculates percentage chance of drawing X out of Y selected cards, given the next N cards drawn from your deck.
+- Accounts for relic or draw powers (e.g. pocketwatch, fiddle, pollinous core) in setting the size of your next draw.
+- "Sim Draw" option to see what your upcoming draws might look like. 
+- "Rawdog" mode if you prefer to just enter the numbers by hand.
+- Gamepad navigation fully supported.
+
+Note that you can map the mod's All Cards view to your Draw Pile button via the Mod Settings ('Override Draw Pile button')
+
+Feedback and feature requests always welcome!
+
+Source code and issue tracker:
+https://github.com/davekalina/spire2-hypergeo

@@ -24,10 +24,42 @@ internal static class AllCardsSession
     private static string? _pileFingerprint;
 
     /// <summary>
-    /// Whether the per-card odds overlay is switched on. Outlives combat, and starts on
-    /// — the odds are what the screen is for.
+    /// Whether the per-card odds overlay is switched on. Outlives combat; starts at
+    /// whatever Mod Settings says.
     /// </summary>
-    public static bool ShowOddsOnCards { get; set; } = true;
+    public static bool ShowOddsOnCards
+    {
+        get => Preference(HypergeoSettings.Keys.ShowOddsOnCards, ref _showOddsOnCards);
+        set => _showOddsOnCards = value;
+    }
+
+    private static bool? _showOddsOnCards;
+    private static bool? _combineSameCardOdds;
+    private static bool? _rawdogMode;
+    private static bool? _includeHandInReshuffle;
+
+    /// <summary>
+    /// A view preference: the saved default until the player says otherwise, and their
+    /// answer for the rest of the session after that.
+    ///
+    /// Read lazily rather than at startup, because the settings file is only worth
+    /// touching once someone opens the screen, and because a default changed in Mod
+    /// Settings should be picked up without restarting the game.
+    /// </summary>
+    private static bool Preference(string key, ref bool? session) =>
+        session ??= HypergeoSettings.Get(key);
+
+    /// <summary>
+    /// Forget the session's answers so the saved defaults are read afresh. Called when
+    /// a default changes in Mod Settings, which is a statement about every run.
+    /// </summary>
+    public static void ResetPreferences()
+    {
+        _showOddsOnCards = null;
+        _combineSameCardOdds = null;
+        _rawdogMode = null;
+        _includeHandInReshuffle = null;
+    }
 
     /// <summary>The cards the player picked, by instance.</summary>
     public static HashSet<CardModel> SelectedCards { get; } = [];
@@ -51,13 +83,22 @@ internal static class AllCardsSession
     /// physical copy alone, which differs between copies once they sit in different
     /// piles.
     /// </summary>
-    public static bool CombineSameCardOdds { get; set; } = true;
+    public static bool CombineSameCardOdds
+    {
+        get => Preference(
+            HypergeoSettings.Keys.CombineSameCardOdds, ref _combineSameCardOdds);
+        set => _combineSameCardOdds = value;
+    }
 
     /// <summary>
     /// Whether the shelf shows the plain hypergeometric calculator instead of the
     /// combat query. A view preference, so it outlives combat like the odds overlay.
     /// </summary>
-    public static bool RawdogMode { get; set; }
+    public static bool RawdogMode
+    {
+        get => Preference(HypergeoSettings.Keys.RawdogMode, ref _rawdogMode);
+        set => _rawdogMode = value;
+    }
 
     /// <summary>
     /// Whether the hand joins the discard pile in the reshuffle.
@@ -67,7 +108,12 @@ internal static class AllCardsSession
     /// drawing more cards during *this* turn, when the hand is staying where it is and
     /// only the discard would be reshuffled.
     /// </summary>
-    public static bool IncludeHandInReshuffle { get; set; } = true;
+    public static bool IncludeHandInReshuffle
+    {
+        get => Preference(
+            HypergeoSettings.Keys.IncludeHandInReshuffle, ref _includeHandInReshuffle);
+        set => _includeHandInReshuffle = value;
+    }
 
     /// <summary>
     /// The calculator's four numbers, and whether they have been seeded from the deck

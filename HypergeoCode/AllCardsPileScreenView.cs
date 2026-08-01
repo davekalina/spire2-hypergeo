@@ -45,8 +45,6 @@ internal sealed class AllCardsPileScreenView : IDisposable
     private readonly HBoxContainer _resetRow;
     private readonly Button _simulateDeal;
     private readonly Button _simulateReset;
-    private readonly Control _simulateResetRoot;
-    private readonly MegaLabel _simulateNote;
     private bool _dealPending;
     private readonly MegaLabel _targetCountLabel;
     private readonly NativeShelf.ShelfRow _needRow;
@@ -108,7 +106,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
 
         _searchBar = _shelf.AddSearchBar(_shelf.Top);
 
-        var draw = _shelf.AddModule(_shelf.Top, "Draw");
+        var draw = _shelf.AddModule(
+            _shelf.Top,
+            "Draw",
+            "How many cards the next hand draws. Worked out from your relics, powers " +
+            "and hand size; set it by hand to ask about a different number.");
         var drawRow = NativeShelf.CreateControlRow();
         var drawDecreaseControl = _shelf.CreateButton("−", 48);
         var drawCountControl = _shelf.CreateButton(
@@ -128,7 +130,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _shelf.AddCaption(draw.Body, "cards next hand");
         _drawNote = _shelf.AddNote(draw.Body, string.Empty, 13);
 
-        var selection = _shelf.AddModule(_shelf.Top, "Hits");
+        var selection = _shelf.AddModule(
+            _shelf.Top,
+            "Hits",
+            "How many of the cards you selected the draw has to contain. Set it to " +
+            "zero to ask the opposite: the chance of drawing none of them.");
         var targetRow = NativeShelf.CreateControlRow();
         var targetDecreaseControl = _shelf.CreateButton("−", 48);
         var targetCountControl = _shelf.CreateDisplay(string.Empty, 52);
@@ -143,7 +149,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _targetCountVisual = targetCountControl.Visual;
         _hintLabel = _shelf.AddCaption(selection.Body, string.Empty);
 
-        var result = _shelf.AddModule(_shelf.Top, "Draw Chance");
+        var result = _shelf.AddModule(
+            _shelf.Top,
+            "Draw Chance",
+            "The odds the next draw meets what you asked for, across the draw pile and " +
+            "the reshuffle behind it.");
         _queryNote = _shelf.AddNote(result.Body, string.Empty);
         _needRow = _shelf.AddRow(result.Body, "Need");
         _heldRow = _shelf.AddRow(result.Body, "In hand");
@@ -156,46 +166,66 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _resetRow.AddChild(resetControl.Root);
         result.Body.AddChild(_resetRow);
 
-        // Dealing a hand answers the same question the percentages do, in the one form
+        // Dealing a draw answers the same question the percentages do, in the one form
         // a percentage cannot take: actual cards, laid out where the piles were.
-        var simulate = _shelf.AddModule(_shelf.Top, "Simulate");
+        var simulate = _shelf.AddModule(
+            _shelf.Top,
+            "Simulate Draw",
+            "Deal a draw at random from the draw pile, and from the reshuffle behind " +
+            "it if the draw pile runs out. What the percentages above describe, in " +
+            "cards.");
         var simulateRow = NativeShelf.CreateControlRow();
         var dealControl = _shelf.CreateButton(
             "Draw",
             104,
-            "Deal a draw at random from the draw pile, then from the reshuffle if the " +
-            "draw pile runs out. Deal again as often as you like.",
-            "Simulate Draw");
+            "Deal a draw at random. Deal again as often as you like — one draw says " +
+            "little, and a dozen say what the odds mean.",
+            "Simulate Draw",
+            fontAdjust: -2);
         _simulateDeal = dealControl.Input;
         simulateRow.AddChild(dealControl.Root);
         var simulateResetControl = _shelf.CreateButton(
-            "Reset", 104, "Put the dealt hand away and show the real piles again.");
+            "Reset",
+            104,
+            "Put the dealt draw away and show the real piles again.",
+            fontAdjust: -2);
         _simulateReset = simulateResetControl.Input;
-        _simulateResetRoot = simulateResetControl.Root;
-        // Nothing to put away until a hand is dealt. UpdateSimulationControls brings it
-        // back if the session already holds one.
-        _simulateResetRoot.Visible = false;
         simulateRow.AddChild(simulateResetControl.Root);
         simulate.Body.AddChild(simulateRow);
-        _simulateNote = _shelf.AddNote(simulate.Body, string.Empty, 13);
 
         _combatModules = [draw.Root, selection.Root, result.Root, simulate.Root];
         AddCalculatorModules();
 
+        // Each of these starts from a default in Settings → Mod Settings; changing one
+        // here answers a question about this run and is forgotten when the game closes.
         _overlayToggle = _shelf.AddToggle(
-            _shelf.Bottom, "Show Odds on Cards", AllCardsSession.ShowOddsOnCards);
+            _shelf.Bottom,
+            "Show Odds on Cards",
+            AllCardsSession.ShowOddsOnCards,
+            "Print each card's chance of being drawn on the card itself. Turn it off " +
+            "for a clean look at the piles.");
         _combineToggle = _shelf.AddToggle(
             _shelf.Bottom,
             "Combine Same Card Odds",
-            AllCardsSession.CombineSameCardOdds);
+            AllCardsSession.CombineSameCardOdds,
+            "Count every copy of a card together, so a Strike shows the chance of " +
+            "drawing any Strike. Turn it off to ask about that one copy, which " +
+            "differs once copies sit in different piles.");
         _combineToggle.Toggled += OnCombineToggled;
         _handToggle = _shelf.AddToggle(
             _shelf.Bottom,
             "Include Hand in Reshuffle",
-            AllCardsSession.IncludeHandInReshuffle);
+            AllCardsSession.IncludeHandInReshuffle,
+            "Count your hand as part of the reshuffle, which is what happens when the " +
+            "turn ends. Turn it off to ask about drawing more cards during this turn, " +
+            "while the hand is staying where it is.");
         _handToggle.Toggled += OnIncludeHandToggled;
         _rawdogToggle = _shelf.AddToggle(
-            _shelf.Bottom, "Rawdog Mode", AllCardsSession.RawdogMode);
+            _shelf.Bottom,
+            "Rawdog Mode",
+            AllCardsSession.RawdogMode,
+            "Replace the combat query with a plain hypergeometric calculator: any " +
+            "deck, any draw, no reference to this fight.");
         _rawdogToggle.Toggled += OnRawdogToggled;
         AddAboutRow();
 
@@ -262,7 +292,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
     {
         // The rows are named for cards; the hover tips name the same things for anyone
         // reading a statistics text alongside.
-        var inputs = _shelf.AddModule(_shelf.Top, "Calculator");
+        var inputs = _shelf.AddModule(
+            _shelf.Top,
+            "Calculator",
+            "A plain hypergeometric calculator, free of this combat: any deck, any " +
+            "draw, any number of cards you care about.");
         _population = _shelf.AddStepperRow(inputs.Body, "Deck", "Population");
         _sample = _shelf.AddStepperRow(inputs.Body, "Draw", "Sample Size");
         _successes = _shelf.AddStepperRow(
@@ -270,7 +304,11 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _wanted = _shelf.AddStepperRow(
             inputs.Body, "Hits wanted", "Successes in sample");
 
-        var results = _shelf.AddModule(_shelf.Top, "Odds");
+        var results = _shelf.AddModule(
+            _shelf.Top,
+            "Odds",
+            "The chance of drawing exactly, at least, and at most the number of hits " +
+            "you asked for, and the average number a draw of this size contains.");
         _exactlyRow = _shelf.AddRow(results.Body, "Exactly");
         _atLeastRow = _shelf.AddRow(results.Body, "At least");
         _atMostRow = _shelf.AddRow(results.Body, "At most");
@@ -392,9 +430,9 @@ internal sealed class AllCardsPileScreenView : IDisposable
             // back to searching the viewport and lands on the combat behind.
             if (_resetRow.Visible)
                 rows.Add(new Control[] { _selectionReset });
-            rows.Add(_simulateResetRoot.Visible
-                ? new Control[] { _simulateDeal, _simulateReset }
-                : new Control[] { _simulateDeal });
+            // Both simulate buttons are always on screen — Reset greys out rather than
+            // leaving — so the row is the same either way.
+            rows.Add(new Control[] { _simulateDeal, _simulateReset });
         }
         rows.Add(new Control[] { _overlayToggle });
         rows.Add(new Control[] { _combineToggle });
@@ -828,22 +866,12 @@ internal sealed class AllCardsPileScreenView : IDisposable
     }
 
     /// <summary>
-    /// Reset only exists while there is a hand to put away. Its arrival and departure
-    /// change which rows the gamepad can reach, so the shelf is rewired when it moves —
-    /// but only then, since this runs on every refresh.
+    /// Reset greys out when there is no dealt draw to put away, rather than coming and
+    /// going: the row keeps its shape, and the focus chain does not have to be rebuilt
+    /// every time a draw is dealt or cleared.
     /// </summary>
-    private void UpdateSimulationControls()
-    {
-        var simulated = AllCardsSession.SimulatedHand;
-        _simulateNote.Text = simulated == null
-            ? string.Empty
-            : $"Showing {simulated.Cards.Count} dealt " +
-              (simulated.Cards.Count == 1 ? "card" : "cards");
-        if (_simulateResetRoot.Visible == (simulated != null))
-            return;
-        SetVisibleKeepingFocus(_simulateResetRoot, simulated != null);
-        WireShelfFocus();
-    }
+    private void UpdateSimulationControls() => NativeShelf.SetButtonState(
+        _simulateReset, enabled: AllCardsSession.SimulatedHand != null);
 
     /// <summary>
     /// Where the dealt cards came from. Worth saying only when the draw pile ran out

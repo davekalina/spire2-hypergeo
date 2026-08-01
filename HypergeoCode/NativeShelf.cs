@@ -22,7 +22,8 @@ internal sealed class NativeShelf : IDisposable
     /// <summary>Sidebar width. The card grid is inset by the same amount.</summary>
     public const float Width = 288f;
 
-    private const float Margin = 16f;
+    /// <summary>Gap between the shelf's edge and its contents.</summary>
+    public const float Margin = 16f;
     private const float ShadowWidth = 4f;
     private const float ModuleSeparation = 4f;
     private const float ModuleSpacing = 18f;
@@ -150,12 +151,13 @@ internal sealed class NativeShelf : IDisposable
     /// A titled module: the Card Library's sorter bar over an indented body, followed
     /// by the same 18 px gap the library leaves between its own modules.
     /// </summary>
-    public ShelfModule AddModule(VBoxContainer parent, string title)
+    public ShelfModule AddModule(
+        VBoxContainer parent, string title, string? description = null)
     {
         var module = new VBoxContainer { Name = $"{title}Module" };
         module.AddThemeConstantOverride("separation", (int)ModuleSeparation);
 
-        module.AddChild(CreateHeader(title));
+        module.AddChild(CreateHeader(title, description));
 
         var indent = new MarginContainer();
         indent.AddThemeConstantOverride("margin_left", (int)BodyIndent);
@@ -174,12 +176,24 @@ internal sealed class NativeShelf : IDisposable
         return new ShelfModule(module, body);
     }
 
-    private Control CreateHeader(string title)
+    private Control CreateHeader(string title, string? description = null)
     {
         var header = SceneHelper.Instantiate<NCardViewSortButton>(SortButtonScene);
         header.Name = $"{title}Header";
         header.FocusMode = Control.FocusModeEnum.None;
-        header.MouseFilter = Control.MouseFilterEnum.Ignore;
+        // Pass, not Ignore, when the header explains itself: it has to see the mouse to
+        // know it is hovered, while still letting the shelf beneath have the event.
+        header.MouseFilter = description == null
+            ? Control.MouseFilterEnum.Ignore
+            : Control.MouseFilterEnum.Pass;
+        if (description != null)
+        {
+            header.MouseEntered += () => NHoverTipSet.CreateAndShow(
+                header,
+                NativeHoverTip.Create(title, description, $"HypergeoModule:{title}"),
+                HoverTipAlignment.Right);
+            header.MouseExited += () => NHoverTipSet.Remove(header);
+        }
         // The bar is a heading here, not a control: no sort direction to show.
         header.GetNode<Control>("%Image").Hide();
         var label = header.GetNode<MegaLabel>("%Label");
@@ -420,7 +434,8 @@ internal sealed class NativeShelf : IDisposable
     }
 
     /// <summary>The Card Library's bottom-of-sidebar view toggle.</summary>
-    public NLibraryStatTickbox AddToggle(VBoxContainer parent, string label, bool ticked)
+    public NLibraryStatTickbox AddToggle(
+        VBoxContainer parent, string label, bool ticked, string? description = null)
     {
         var tickbox = SceneHelper.Instantiate<NLibraryStatTickbox>(TickboxScene);
         tickbox.Name = $"{label.Replace(" ", string.Empty)}Toggle";
@@ -440,6 +455,14 @@ internal sealed class NativeShelf : IDisposable
             tickbox.SetLabel(label);
             tickbox.IsTicked = ticked;
         };
+        if (description != null)
+        {
+            tickbox.MouseEntered += () => NHoverTipSet.CreateAndShow(
+                tickbox,
+                NativeHoverTip.Create(label, description, $"HypergeoToggle:{label}"),
+                HoverTipAlignment.Right);
+            tickbox.MouseExited += () => NHoverTipSet.Remove(tickbox);
+        }
         parent.AddChild(tickbox);
         return tickbox;
     }
@@ -460,9 +483,10 @@ internal sealed class NativeShelf : IDisposable
         string text,
         float width,
         string? hoverDescription = null,
-        string? hoverTitle = null)
+        string? hoverTitle = null,
+        int fontAdjust = 0)
     {
-        var display = CreateDisplay(text, width);
+        var display = CreateDisplay(text, width, fontAdjust);
         var input = new Button
         {
             Flat = true,
@@ -514,7 +538,7 @@ internal sealed class NativeShelf : IDisposable
         return new ShelfButton(display.Root, input, display.Label);
     }
 
-    public ShelfDisplay CreateDisplay(string text, float width)
+    public ShelfDisplay CreateDisplay(string text, float width, int fontAdjust = 0)
     {
         var root = new Control
         {
@@ -547,7 +571,7 @@ internal sealed class NativeShelf : IDisposable
             > 5 => 15,
             _ => 19,
         };
-        var label = CreateText(text, fontSize);
+        var label = CreateText(text, fontSize + fontAdjust);
         label.Name = "NativeLabel";
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.VerticalAlignment = VerticalAlignment.Center;
