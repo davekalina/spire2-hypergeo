@@ -10,20 +10,22 @@ internal static class AllCardsCombatPatch
 
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NCombatUi._Ready))]
-    private static void AfterReady(NCombatUi __instance)
-    {
-        if (Views.ContainsKey(__instance))
-            return;
-        var view = new AllCardsScreenView(__instance);
-        Views.Add(__instance, view);
-        view.Attach();
-    }
+    private static void AfterReady(NCombatUi __instance) =>
+        Guard.Run("Adding the All Cards button to combat", () =>
+        {
+            if (Views.ContainsKey(__instance))
+                return;
+            var view = new AllCardsScreenView(__instance);
+            Views.Add(__instance, view);
+            view.Attach();
+        });
 
     [HarmonyPrefix]
     [HarmonyPatch(nameof(NCombatUi._ExitTree))]
-    private static void BeforeExitTree(NCombatUi __instance)
-    {
-        if (Views.Remove(__instance, out var view))
-            view.Dispose();
-    }
+    private static void BeforeExitTree(NCombatUi __instance) =>
+        Guard.Run("Removing the All Cards button from combat", () =>
+        {
+            if (Views.Remove(__instance, out var view))
+                view.Dispose();
+        });
 }

@@ -23,25 +23,34 @@ namespace Hypergeo.HypergeoCode;
 [HarmonyPatch(typeof(NCombatCardPile), "OnRelease")]
 internal static class DrawPileOverridePatch
 {
+    /// <summary>
+    /// Returning false takes the button away from the game, so a failure here falls
+    /// back to true: the player gets the draw pile they pressed for, rather than a
+    /// button that does nothing.
+    /// </summary>
     [HarmonyPrefix]
-    private static bool BeforeOnRelease(NCombatCardPile __instance)
-    {
-        // NDrawPileButton is the only pile this applies to, and OnRelease is declared on
-        // the shared base, so the discard and exhaust piles have to be let through.
-        if (!HypergeoSettings.DrawPileTakeover || __instance is not NDrawPileButton)
-            return true;
-        if (!CombatManager.Instance.IsInProgress)
-            return true;
-
-        var capstone = NCapstoneContainer.Instance;
-        if (capstone?.CurrentCapstoneScreen is NCardPileScreen open)
+    private static bool BeforeOnRelease(NCombatCardPile __instance) => Guard.Run(
+        "Opening All Cards from the Draw Pile button",
+        () =>
         {
-            // Pressing it again closes, the way the pile buttons already behave.
-            if (open.Name == AllCardsPileScreenCoordinator.ScreenName)
-                capstone.Close();
+            // NDrawPileButton is the only pile this applies to, and OnRelease is
+            // declared on the shared base, so the discard and exhaust piles have to be
+            // let through.
+            if (!HypergeoSettings.DrawPileTakeover || __instance is not NDrawPileButton)
+                return true;
+            if (!CombatManager.Instance.IsInProgress)
+                return true;
+
+            var capstone = NCapstoneContainer.Instance;
+            if (capstone?.CurrentCapstoneScreen is NCardPileScreen open)
+            {
+                // Pressing it again closes, the way the pile buttons already behave.
+                if (open.Name == AllCardsPileScreenCoordinator.ScreenName)
+                    capstone.Close();
+                return false;
+            }
+            AllCardsPileScreenCoordinator.OpenForLocalPlayer();
             return false;
-        }
-        AllCardsPileScreenCoordinator.OpenForLocalPlayer();
-        return false;
-    }
+        },
+        onFailure: true);
 }

@@ -62,23 +62,25 @@ internal static class ModSettingsPatch
 
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NModInfoContainer.Fill))]
-    private static void AfterFill(NModInfoContainer __instance, Mod mod)
-    {
-        var isThisMod = mod.manifest?.id == MainFile.ModId;
-        var controls = Resolve(__instance, isThisMod);
-        if (controls != null)
-            controls.Visible = isThisMod;
-        if (__instance.GetNodeOrNull<Control>("ModDescription") is { } description)
-            description.OffsetBottom = isThisMod ? DescriptionBottom : 886f;
-    }
+    private static void AfterFill(NModInfoContainer __instance, Mod mod) =>
+        Guard.Run("Adding this mod's settings to the info panel", () =>
+        {
+            var isThisMod = mod.manifest?.id == MainFile.ModId;
+            var controls = Resolve(__instance, isThisMod);
+            if (controls != null)
+                controls.Visible = isThisMod;
+            if (__instance.GetNodeOrNull<Control>("ModDescription") is { } description)
+                description.OffsetBottom = isThisMod ? DescriptionBottom : 886f;
+        });
 
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NModInfoContainer.Clear))]
-    private static void AfterClear(NModInfoContainer __instance)
-    {
-        if (__instance.GetNodeOrNull<Control>(ContainerName) is { } controls)
-            controls.Visible = false;
-    }
+    private static void AfterClear(NModInfoContainer __instance) =>
+        Guard.Run("Hiding this mod's settings", () =>
+        {
+            if (__instance.GetNodeOrNull<Control>(ContainerName) is { } controls)
+                controls.Visible = false;
+        });
 
     private static Control? Resolve(NModInfoContainer panel, bool create)
     {

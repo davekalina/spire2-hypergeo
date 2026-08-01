@@ -52,21 +52,22 @@ internal static class InputSettingsPatch
     [HarmonyPrefix]
     [HarmonyPatch(nameof(NInputManager.ModifyControllerButton))]
     private static void BeforeModifyControllerButton(
-        NInputManager __instance, StringName input, StringName controllerInput)
-    {
-        if (input.ToString() != AllCardsHotkey.Action)
-            return;
-        if (ControllerMapField?.GetValue(__instance) is not
-            Dictionary<StringName, StringName> map)
-            return;
-        if (map.ContainsKey(input))
-            return;
-        foreach (var held in map
-                     .Where(binding => binding.Value == controllerInput)
-                     .Select(binding => binding.Key)
-                     .ToList())
-            map.Remove(held);
-    }
+        NInputManager __instance, StringName input, StringName controllerInput) =>
+        Guard.Run("Freeing a controller button for the All Cards shortcut", () =>
+        {
+            if (input.ToString() != AllCardsHotkey.Action)
+                return;
+            if (ControllerMapField?.GetValue(__instance) is not
+                Dictionary<StringName, StringName> map)
+                return;
+            if (map.ContainsKey(input))
+                return;
+            foreach (var held in map
+                         .Where(binding => binding.Value == controllerInput)
+                         .Select(binding => binding.Key)
+                         .ToList())
+                map.Remove(held);
+        });
 }
 
 /// <summary>Gives the shortcut's settings row a readable name.</summary>
@@ -79,13 +80,14 @@ internal static class InputSettingsEntryPatch
     /// </summary>
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NInputSettingsEntry._Ready))]
-    private static void AfterReady(NInputSettingsEntry __instance)
-    {
-        if (__instance.InputName?.ToString() != AllCardsHotkey.Action)
-            return;
-        // A MegaLabel since 0.110; it was a MegaRichTextLabel before, and asking for the
-        // wrong one throws rather than returning null.
-        __instance.GetNode<MegaLabel>("%InputLabel").Text =
-            AllCardsHotkey.SettingsTitle;
-    }
+    private static void AfterReady(NInputSettingsEntry __instance) =>
+        Guard.Run("Naming the All Cards row in Settings", () =>
+        {
+            if (__instance.InputName?.ToString() != AllCardsHotkey.Action)
+                return;
+            // A MegaLabel since 0.110; it was a MegaRichTextLabel before, and asking
+            // for the wrong one throws rather than returning null.
+            __instance.GetNode<MegaLabel>("%InputLabel").Text =
+                AllCardsHotkey.SettingsTitle;
+        });
 }

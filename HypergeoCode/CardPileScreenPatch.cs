@@ -12,26 +12,28 @@ internal static class CardPileScreenPatch
 
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NCardPileScreen._Ready))]
-    private static void AfterReady(NCardPileScreen __instance)
-    {
-        if (AllCardsPileScreenCoordinator.TryAttach(__instance))
-            return;
-        if (__instance.Pile.Type is not (PileType.Draw or PileType.Discard) ||
-            Views.ContainsKey(__instance))
-            return;
-        var view = new DrawOddsView(__instance);
-        Views.Add(__instance, view);
-        view.Attach();
-    }
+    private static void AfterReady(NCardPileScreen __instance) =>
+        Guard.Run("Building the pile screen view", () =>
+        {
+            if (AllCardsPileScreenCoordinator.TryAttach(__instance))
+                return;
+            if (__instance.Pile.Type is not (PileType.Draw or PileType.Discard) ||
+                Views.ContainsKey(__instance))
+                return;
+            var view = new DrawOddsView(__instance);
+            Views.Add(__instance, view);
+            view.Attach();
+        });
 
     [HarmonyPrefix]
     [HarmonyPatch(nameof(NCardPileScreen._ExitTree))]
-    private static void BeforeExitTree(NCardPileScreen __instance)
-    {
-        AllCardsPileScreenCoordinator.Detach(__instance);
-        if (Views.Remove(__instance, out var view))
-            view.Dispose();
-    }
+    private static void BeforeExitTree(NCardPileScreen __instance) =>
+        Guard.Run("Tearing down the pile screen view", () =>
+        {
+            AllCardsPileScreenCoordinator.Detach(__instance);
+            if (Views.Remove(__instance, out var view))
+                view.Dispose();
+        });
 
     public static bool TryShowHoverTips(NCardHolder holder)
     {
@@ -47,7 +49,14 @@ internal static class CardPileScreenPatch
 [HarmonyPatch(typeof(NCardHolder), "CreateHoverTips")]
 internal static class DrawOddsHoverTipPatch
 {
+    /// <summary>
+    /// Returning false suppresses the game's own hover tips in favour of the mod's, so
+    /// a failure here has to fall back to true: better the native tip than none at all.
+    /// </summary>
     [HarmonyPrefix]
     private static bool BeforeCreateHoverTips(NCardHolder __instance) =>
-        !CardPileScreenPatch.TryShowHoverTips(__instance);
+        Guard.Run(
+            "Showing the draw chance hover tip",
+            () => !CardPileScreenPatch.TryShowHoverTips(__instance),
+            onFailure: true);
 }

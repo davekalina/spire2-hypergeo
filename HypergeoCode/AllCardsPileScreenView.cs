@@ -239,7 +239,10 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _simulateReset.Pressed += ClearSimulatedHand;
         _overlayToggle.Toggled += OnOverlayToggled;
         _searchBar.QueryChanged += OnSearchChanged;
-        _refreshTimer.Timeout += RefreshPresentation;
+        // Guarded because it is a signal from a game node into mod code, and because it
+        // runs several times a second: an unguarded throw here would repeat forever.
+        _refreshTimer.Timeout += () =>
+            Guard.Run("Refreshing the All Cards screen", RefreshPresentation);
     }
 
     public void Attach()
