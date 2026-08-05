@@ -239,11 +239,19 @@ internal sealed class AllCardsPileScreenView : IDisposable
         _simulateReset.Pressed += ClearSimulatedHand;
         _overlayToggle.Toggled += OnOverlayToggled;
         _searchBar.QueryChanged += OnSearchChanged;
-        // Guarded because it is a signal from a game node into mod code, and because it
-        // runs several times a second: an unguarded throw here would repeat forever.
-        _refreshTimer.Timeout += () =>
-            Guard.Run("Refreshing the All Cards screen", RefreshPresentation);
+        _refreshTimer.Timeout += OnRefreshTick;
     }
+
+    /// <summary>
+    /// Guarded because it is a signal from a game node into mod code, and because it runs
+    /// several times a second: an unguarded throw here would repeat forever.
+    ///
+    /// A named method rather than a lambda so <see cref="Dispose"/> can disconnect it.
+    /// Godot matches a connection by delegate, and every lambda expression evaluates to a
+    /// new one, so unsubscribing a second lambda disconnects nothing and logs an error.
+    /// </summary>
+    private void OnRefreshTick() =>
+        Guard.Run("Refreshing the All Cards screen", RefreshPresentation);
 
     public void Attach()
     {
@@ -273,7 +281,13 @@ internal sealed class AllCardsPileScreenView : IDisposable
         foreach (var pile in Piles())
             pile.ContentsChanged -= Render;
         _searchBar.QueryChanged -= OnSearchChanged;
-        _refreshTimer.Timeout -= RefreshPresentation;
+        // The timer is the mod's own node parented to the game's screen, so free it here
+        // rather than leaving it to whatever the screen does next.
+        if (GodotObject.IsInstanceValid(_refreshTimer))
+        {
+            _refreshTimer.Timeout -= OnRefreshTick;
+            _refreshTimer.QueueFree();
+        }
         _overlay.Dispose();
         foreach (var marker in _markers)
             if (GodotObject.IsInstanceValid(marker.Root))
