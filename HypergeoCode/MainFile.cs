@@ -11,7 +11,7 @@ public partial class MainFile : Node
     public const string ModName = "Hypergeometric Draw Odds";
 
     /// <summary>Keep in sync with the <c>version</c> field in Hypergeo.json.</summary>
-    public const string Version = "v1.0.0";
+    public const string Version = "v1.0.1";
 
     public static MegaCrit.Sts2.Core.Logging.Logger Logger { get; } =
         new(ModId, MegaCrit.Sts2.Core.Logging.LogType.Generic);
