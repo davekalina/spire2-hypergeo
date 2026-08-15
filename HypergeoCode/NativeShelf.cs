@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.HoverTips;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.addons.mega_text;
@@ -40,10 +41,14 @@ internal sealed class NativeShelf : IDisposable
     private const string SortButtonScene = "screens/card_library/library_sort_button";
     private const string TickboxScene = "screens/card_library/card_library_tickbox";
     private const string TypeTickboxScene = "screens/card_library/card_type_tickbox";
-    private const string CardLibraryScene = "screens/card_library/card_library";
     private const string HoverTipScene = "ui/hover_tip";
     private const string MarkerTileScene =
         "screens/main_menu/compendium_bottom_button";
+
+    /// <summary>The search field's font and the clear button's ✕, as the library wears them.</summary>
+    private const string SearchFont = "res://themes/kreon_regular_shared.tres";
+    private const string ClearButtonTexture =
+        "res://images/atlases/compressed.sprites/back_button_x.tres";
 
     private readonly MegaLabel _fontSource;
     private readonly TextureRect _buttonTextureSource;
@@ -239,18 +244,69 @@ internal sealed class NativeShelf : IDisposable
     /// <summary>
     /// The Card Library's search bar, text field and clear button together.
     ///
-    /// It is built inline in the library's own scene rather than being a scene of its
-    /// own, so the only way to have one is to instantiate the library and take a copy.
-    /// The library is never added to the tree, so none of it runs.
+    /// Built here rather than copied out of the library. The search bar is defined
+    /// inline in <c>card_library.tscn</c>, so taking one used to mean instantiating the
+    /// whole screen — 52 load steps, the library's own script, the card grid, its
+    /// scene-local shader materials — reaching in for <c>%SearchBar</c>, and freeing the
+    /// rest. Under 0.111 that load throws
+    /// (<c>SwapGCHandleForType: Handle is not initialized</c>) and takes the whole All
+    /// Cards view down with it. Freeing a tree while a child it owns still has a live
+    /// C# wrapper was never sound either, and left a second throw behind on the
+    /// finalizer thread.
+    ///
+    /// <c>NSearchBar._Ready</c> asks only for a <c>TextArea</c> and a
+    /// <c>ClearButton</c> by name, so the three nodes it wants are cheaper to build than
+    /// to borrow, and nothing outside the mod has to load for it. The geometry, font,
+    /// and texture below are the library's own, read off the scene.
     /// </summary>
     public NSearchBar AddSearchBar(VBoxContainer parent)
     {
-        var cardLibrary = SceneHelper.Instantiate<Control>(CardLibraryScene);
-        var searchBar = (NSearchBar)cardLibrary.GetNode<NSearchBar>("%SearchBar").Duplicate();
-        cardLibrary.Free();
+        var searchBar = new NSearchBar
+        {
+            Name = "HypergeoSearchBar",
+            CustomMinimumSize = new Vector2(0, 48),
+        };
 
-        searchBar.Name = "HypergeoSearchBar";
-        searchBar.CustomMinimumSize = new Vector2(0, 48);
+        var textArea = new NMegaLineEdit { Name = "TextArea" };
+        textArea.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        textArea.AddThemeFontOverride(
+            "font",
+            ResourceLoader.Load<Font>(SearchFont, null, ResourceLoader.CacheMode.Reuse));
+        textArea.AddThemeFontSizeOverride("font_size", 24);
+        searchBar.AddChild(textArea);
+
+        // Pinned to the right edge and vertically centred, 48 px square.
+        var clearButton = new NClearSearchButton
+        {
+            Name = "ClearButton",
+            FocusMode = Control.FocusModeEnum.All,
+        };
+        clearButton.SetAnchorsPreset(Control.LayoutPreset.CenterRight);
+        clearButton.OffsetLeft = -48f;
+        clearButton.OffsetTop = -24f;
+        clearButton.OffsetRight = 0f;
+        clearButton.OffsetBottom = 24f;
+        searchBar.AddChild(clearButton);
+
+        // NClearSearchButton._Ready reaches for this by name and tweens its scale.
+        var image = new TextureRect
+        {
+            Name = "Image",
+            CustomMinimumSize = new Vector2(36, 36),
+            Texture = ResourceLoader.Load<Texture2D>(
+                ClearButtonTexture, null, ResourceLoader.CacheMode.Reuse),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Scale = new Vector2(0.9f, 0.9f),
+            PivotOffset = new Vector2(24, 24),
+        };
+        image.SetAnchorsPreset(Control.LayoutPreset.Center);
+        image.OffsetLeft = -18f;
+        image.OffsetTop = -18f;
+        image.OffsetRight = 18f;
+        image.OffsetBottom = 18f;
+        clearButton.AddChild(image);
+
         parent.AddChild(searchBar);
         parent.AddChild(new Control
         {
