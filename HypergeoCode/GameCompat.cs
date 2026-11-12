@@ -6,8 +6,9 @@ using MegaCrit.Sts2.Core.Nodes.CommonUi;
 namespace Hypergeo.HypergeoCode;
 
 /// <summary>
-/// The places where the game's current builds disagree, answered for all of them, so one
-/// DLL loads on the default branch (0.111) and on the beta (0.113) alike.
+/// The places where the game's recent builds disagree, answered for all of them, so one
+/// DLL loads on 0.111 (the previous beta) and 0.113 (the current beta) alike. The main
+/// branch is still 0.107.1, below min_game_version, so for now the mod is beta-only.
 ///
 /// Each member here exists because a direct call compiled against one build fails on
 /// the other. That failure is not a compile error anyone sees. It is a
