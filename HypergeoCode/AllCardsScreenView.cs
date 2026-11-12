@@ -47,8 +47,9 @@ internal sealed class AllCardsScreenView : IDisposable
         // Live only while combat has a UI, the same lifetime as the button itself.
         // The screen registers the same key as one of its close hotkeys, and the
         // hotkey manager runs the most recent binding, so it toggles.
-        NHotkeyManager.Instance?.PushHotkeyReleasedBinding(
-            AllCardsHotkey.Action, OpenFromHotkey);
+        if (NHotkeyManager.Instance is { } hotkeys)
+            GameCompat.PushHotkeyReleasedBinding(
+                hotkeys, AllCardsHotkey.Action, OpenFromHotkey);
     }
 
     public void Dispose()
@@ -56,8 +57,9 @@ internal sealed class AllCardsScreenView : IDisposable
         _inputButton.Pressed -= Open;
         _inputButton.MouseEntered -= OnMouseEntered;
         _inputButton.MouseExited -= OnMouseExited;
-        NHotkeyManager.Instance?.RemoveHotkeyReleasedBinding(
-            AllCardsHotkey.Action, OpenFromHotkey);
+        if (NHotkeyManager.Instance is { } hotkeys)
+            GameCompat.RemoveHotkeyReleasedBinding(
+                hotkeys, AllCardsHotkey.Action, OpenFromHotkey);
         if (GodotObject.IsInstanceValid(_visualButton))
             _visualButton.QueueFree();
     }

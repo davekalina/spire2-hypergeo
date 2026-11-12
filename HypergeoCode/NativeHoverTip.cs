@@ -27,9 +27,8 @@ internal static class NativeHoverTip
             new LocString("gameplay_ui", "DRAW_PILE_INFO"));
         TitleProperty.SetValue(boxedTip, title);
         DescriptionProperty.SetValue(boxedTip, description);
-        var tip = (HoverTip)boxedTip;
-        tip.Id = id;
-        return tip;
+        GameCompat.SetHoverTipId(boxedTip, id);
+        return (HoverTip)boxedTip;
     }
 
     /// <summary>

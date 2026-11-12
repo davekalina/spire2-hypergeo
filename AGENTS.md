@@ -26,6 +26,35 @@ and driven by `HypergeoCode/DrawOddsCalculator.cs`. Both are covered by
 Note that `DrawOdds*` type names describe what the mod computes and are intentional.
 `Hypergeo` is the mod's identity; `draw odds` is its subject matter.
 
+### One build for every supported game version
+
+Currently 0.111 (main) and 0.113.0 (beta), with `min_game_version` at 0.111.0.
+Where the builds differ, the call goes through `HypergeoCode/GameCompat.cs` by name
+and takes whichever form the running game has; never call a member that differs
+between them directly. A direct call compiles against whichever `sts2.dll` is
+installed and then throws `MissingMethodException` on the other build — when the
+*containing method* is first called, before any of it runs, and inside `Guard`, so
+all anyone sees is a feature that quietly stopped working. The known differences:
+
+- `HoverTip.Id` — settable on 0.111, get-only on 0.113 (`GameCompat.SetHoverTipId`).
+- `NHotkeyManager.Push/RemoveHotkeyReleasedBinding` — 0.113 added a trailing
+  `long sequence = 0` and made Remove return it (`GameCompat.*HotkeyReleasedBinding`).
+- The `compressed` texture atlas became `compressed_atlas` in 0.113 (`GameArt`, which
+  tries each path newest first).
+
+Cards, relics or powers that only some supported versions have are referenced by
+class name, never by `typeof`, so the older build does not fail a type load.
+
+To check a new game build: compare the `[sts2]` member references, and for inlined
+enum values and constants the whole normalized IL, between a DLL built against the
+old game and one built against the new (`ilspycmd -il`); any difference is a
+signature that moved. Then check what references cannot show: the Harmony targets by
+name and parameter types (including new overloads), the private fields
+`NextHandDraw.TurnBoundary` and `InputSettingsPatch` read by name, node paths and
+resource paths in the `.pck`, the `gameplay_ui` loc key, and every model that
+overrides `ModifyHandDraw`, `ShouldDraw` or `BeforeHandDraw` — a new one that depends
+on per-turn bookkeeping needs a `TurnBoundary` entry.
+
 ### Surfaces to audit
 
 Any directional change must be applied across all of these:

@@ -21,4 +21,4 @@ Feedback and feature requests always welcome!
 Source code and issue tracker:
 https://github.com/davekalina/spire2-hypergeo
 
-Hypergeometric Draw Odds currently works with version 0.111.0 on the beta-branch only.
+Hypergeometric Draw Odds currently works on both the main branch (version 0.111) and the beta branch (version 0.113.0).

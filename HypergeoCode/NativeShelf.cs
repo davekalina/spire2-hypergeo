@@ -45,10 +45,11 @@ internal sealed class NativeShelf : IDisposable
     private const string MarkerTileScene =
         "screens/main_menu/compendium_bottom_button";
 
-    /// <summary>The search field's font and the clear button's ✕, as the library wears them.</summary>
+    /// <summary>
+    /// The search field's font, as the library wears it. Its ✕ is
+    /// <see cref="GameArt.BackButtonX" />.
+    /// </summary>
     private const string SearchFont = "res://themes/kreon_regular_shared.tres";
-    private const string ClearButtonTexture =
-        "res://images/atlases/compressed.sprites/back_button_x.tres";
 
     private readonly MegaLabel _fontSource;
     private readonly TextureRect _buttonTextureSource;
@@ -293,8 +294,7 @@ internal sealed class NativeShelf : IDisposable
         {
             Name = "Image",
             CustomMinimumSize = new Vector2(36, 36),
-            Texture = ResourceLoader.Load<Texture2D>(
-                ClearButtonTexture, null, ResourceLoader.CacheMode.Reuse),
+            Texture = GameArt.BackButtonX.Load(),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Scale = new Vector2(0.9f, 0.9f),
