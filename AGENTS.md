@@ -26,18 +26,18 @@ and driven by `HypergeoCode/DrawOddsCalculator.cs`. Both are covered by
 Note that `DrawOdds*` type names describe what the mod computes and are intentional.
 `Hypergeo` is the mod's identity; `draw odds` is its subject matter.
 
-### Game versions: beta-only for now
+### Game versions: both branches
 
-The mod is **beta-branch only** for now. The beta is 0.113.0; the main (public)
-branch is still **0.107.1**, below `min_game_version` (0.111.0), so the loader
-refuses the mod there. Main support waits until Mega Crit promotes a newer build to
-main. Until then, keep the Workshop item limited to the beta branch (see
-**Steam Workshop** below) and say "beta branch only" on the store page.
+The mod runs on **both branches**. As of 2026-11-18 main (public) is **0.111.1** and
+the beta is 0.113.1, both at or above `min_game_version` (0.111.0). Keep the Workshop
+item open to both (see **Steam Workshop** below) and name both on the store page.
+Until 2026-11-18 main was 0.107.1, which the loader refuses, and the mod was
+beta-only.
 
 ### One build for every game version it loads on
 
-The code runs on 0.111 (the previous beta) and 0.113.0 (the current beta), and the
-compatibility layer stays so the build is ready when main moves past 0.111. Where
+The code runs on 0.111 (main) and 0.113 (the current beta), and the compatibility
+layer stays so one build serves both. Where
 the builds differ, the call goes through `HypergeoCode/GameCompat.cs` by name
 and takes whichever form the running game has; never call a member that differs
 between them directly. A direct call compiles against whichever `sts2.dll` is
@@ -156,10 +156,11 @@ report that deployment is pending instead.
 The `workshop/` directory is this mod's uploader workspace. See
 `docs/sts2-modding.md` for what each file means.
 
-- **Branch range.** While main is 0.107.1, the item must stay limited to the beta
-  branch, as it was before v1.0.3. Do not put `minBranch`/`maxBranch` in
+- **Branch range.** With main at 0.111.1 (2026-11-18), the range stays empty — open
+  to every branch, which is what a new upload gets by default. Only if main falls
+  below `min_game_version` again must it be limited to the beta branch. Do not put `minBranch`/`maxBranch` in
   `workshop.json` (uploads carrying them time out; see `docs/sts2-modding.md`).
-  Set the range by hand on the item's change-notes page after **every** upload,
+  Any limit is set by hand on the item's change-notes page after **every** upload,
   because Steam attaches it to that item version only.
 
 - Never change the manifest `id` once the mod has been published. It is the
