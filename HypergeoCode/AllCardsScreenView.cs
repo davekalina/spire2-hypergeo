@@ -22,6 +22,8 @@ internal sealed class AllCardsScreenView : IDisposable
         _combatUi = combatUi;
         _visualButton = (NDrawPileButton)combatUi.DrawPile.Duplicate();
         _visualButton.Name = "DrawOddsAllCardsButton";
+        // Before it enters the tree, where it would register the Draw Pile's key.
+        CloneHotkeysPatch.Register(_visualButton);
         _inputButton = new Button
         {
             Flat = true,
@@ -71,6 +73,7 @@ internal sealed class AllCardsScreenView : IDisposable
         }
         finally
         {
+            CloneHotkeysPatch.Forget(_visualButton);
             if (GodotObject.IsInstanceValid(_visualButton))
                 _visualButton.QueueFree();
         }
