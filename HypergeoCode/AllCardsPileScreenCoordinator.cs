@@ -32,14 +32,26 @@ internal static class AllCardsPileScreenCoordinator
             // Listing the shortcut alongside back makes the screen close on the same
             // key that opened it, through the game's own close-hotkey mechanism.
             NCardPileScreen.ShowScreen(
-                player.PlayerCombatState!.DrawPile,
-                [MegaInput.pauseAndBack.ToString(), AllCardsHotkey.Action]);
+                player.PlayerCombatState!.DrawPile, CloseHotkeys());
         }
         finally
         {
             _isOpening = false;
             _openingPlayer = null;
         }
+    }
+
+    /// <summary>
+    /// When the Draw Pile button opens All Cards, its key closes it too, the way the game
+    /// lists a pile button's own key among its screen's close keys. The button cannot do
+    /// it itself: from 0.114 nothing behind an open screen receives a shortcut.
+    /// </summary>
+    private static string[] CloseHotkeys()
+    {
+        string[] keys = [MegaInput.pauseAndBack.ToString(), AllCardsHotkey.Action];
+        return HypergeoSettings.DrawPileTakeover
+            ? [.. keys, MegaInput.viewDrawPile.ToString()]
+            : keys;
     }
 
     public static bool TryAttach(NCardPileScreen screen)

@@ -1,4 +1,5 @@
 using System.Reflection;
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
@@ -24,10 +25,24 @@ namespace Hypergeo.HypergeoCode;
 /// SetupPlayerTurn runs BeforeHandDraw then ModifyHandDraw then the draw itself and
 /// then AfterPlayerTurnStart, and only afterwards does Hook.AfterSideTurnStart decay
 /// powers. So effects that decay after the draw are read at their current amount.
+///
+/// <see cref="Count" /> is the number of cards the next hand takes from the piles the
+/// player can see now. A card put on top of the draw pile just before the draw is
+/// drawn but does not count, because it is not in those piles.
 /// </summary>
 internal sealed record NextHandDraw(int Count, IReadOnlyList<string> Modifiers)
 {
     private static readonly NextHandDraw None = new(0, []);
+
+    /// <summary>
+    /// 0.114: before every hand draw, Aeonglass Dominion puts a Wither on top of its
+    /// owner's draw pile, so the first card of the hand is always that Wither. Named, not
+    /// <c>typeof</c>, because 0.111 does not have it.
+    /// </summary>
+    private const string AeonglassDominionPower = "AeonglassDominionPower";
+
+    /// <summary>True only while the hooks are being read for the next hand.</summary>
+    internal static bool IsPredicting { get; private set; }
 
     public static NextHandDraw Resolve(
         ICombatState state, Player player, int retainedCards)
@@ -40,9 +55,17 @@ internal sealed record NextHandDraw(int Count, IReadOnlyList<string> Modifiers)
         IEnumerable<AbstractModel> modifiers;
         using (new TurnBoundary(player))
         {
-            shouldDraw = Hook.ShouldDraw(state, player, fromHandDraw: true, out _);
-            modified = Hook.ModifyHandDraw(
-                state, player, CombatManager.baseHandDrawCount, out modifiers);
+            IsPredicting = true;
+            try
+            {
+                shouldDraw = Hook.ShouldDraw(state, player, fromHandDraw: true, out _);
+                modified = Hook.ModifyHandDraw(
+                    state, player, CombatManager.baseHandDrawCount, out modifiers);
+            }
+            finally
+            {
+                IsPredicting = false;
+            }
         }
         if (!shouldDraw)
             return None;
@@ -57,7 +80,17 @@ internal sealed record NextHandDraw(int Count, IReadOnlyList<string> Modifiers)
         var capacity = Math.Max(0, CardPile.MaxCardsInHand - retainedCards);
         if (desired > capacity)
             names.Add("Hand capacity");
-        return new NextHandDraw(Math.Min(capacity, desired), names);
+        var count = Math.Min(capacity, desired);
+
+        if (count > 0 &&
+            player.Creature.Powers.FirstOrDefault(power =>
+                power.GetType().Name == AeonglassDominionPower) is { } aeonglass)
+        {
+            count--;
+            if (DisplayName(aeonglass) is { } name && !names.Contains(name))
+                names.Add(name);
+        }
+        return new NextHandDraw(count, names);
     }
 
     private static string? DisplayName(AbstractModel model) => model switch
@@ -173,5 +206,41 @@ internal sealed record NextHandDraw(int Count, IReadOnlyList<string> Modifiers)
                 "draw count will not be predicted.");
             return null;
         }
+    }
+}
+
+/// <summary>
+/// 0.114's Amnesia (one of Knowledge Demon's turn-one choices under Dread) draws two
+/// fewer cards, and is removed when the player's turn ends. So it shapes only the hand
+/// already dealt, never the next one, and the prediction must not count it. Read
+/// across the turn boundary it would, so while — and only while — the next hand is
+/// being predicted, it leaves the count alone. The real draw is untouched.
+///
+/// Named, not <c>typeof</c>, because 0.111 does not have it; there the patch is skipped.
+/// </summary>
+[HarmonyPatch]
+internal static class AmnesiaPredictionPatch
+{
+    private const string TypeName = "MegaCrit.Sts2.Core.Models.Powers.AmnesiaPower";
+
+    private static bool Prepare() => Target() is not null;
+
+    private static MethodBase? TargetMethod() => Target();
+
+    private static MethodInfo? Target() =>
+        typeof(PowerModel).Assembly.GetType(TypeName)?.GetMethod(
+            nameof(PowerModel.ModifyHandDraw),
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly,
+            [typeof(Player), typeof(decimal)]);
+
+    /// <summary>By position (<c>__1</c> is the count), so a renamed parameter cannot
+    /// stop the mod loading.</summary>
+    [HarmonyPrefix]
+    private static bool BeforeModifyHandDraw(decimal __1, ref decimal __result)
+    {
+        if (!NextHandDraw.IsPredicting)
+            return true;
+        __result = __1;
+        return false;
     }
 }

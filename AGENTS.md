@@ -28,16 +28,16 @@ Note that `DrawOdds*` type names describe what the mod computes and are intentio
 
 ### Game versions: both branches
 
-The mod runs on **both branches**. As of 2026-11-18 main (public) is **0.111.1** and
-the beta is 0.113.1, both at or above `min_game_version` (0.111.0). Keep the Workshop
-item open to both (see **Steam Workshop** below) and name both on the store page.
-Until 2026-11-18 main was 0.107.1, which the loader refuses, and the mod was
+The mod runs on **both branches**. As of 2026-11-25 main (public) is **0.111.1** and
+the beta is **0.114.0**, both at or above `min_game_version` (0.111.0). Keep the
+Workshop item open to both (see **Steam Workshop** below) and name both on the store
+page. Until 2026-11-18 main was 0.107.1, which the loader refuses, and the mod was
 beta-only.
 
 ### One build for every game version it loads on
 
-The code runs on 0.111 (main) and 0.113 (the current beta), and the compatibility
-layer stays so one build serves both. Where
+The code runs on 0.111 (main) and 0.114 (the current beta), and on 0.113 (the
+previous beta), and the compatibility layer stays so one build serves them all. Where
 the builds differ, the call goes through `HypergeoCode/GameCompat.cs` by name
 and takes whichever form the running game has; never call a member that differs
 between them directly. A direct call compiles against whichever `sts2.dll` is
@@ -47,7 +47,16 @@ all anyone sees is a feature that quietly stopped working. The known differences
 
 - `HoverTip.Id` — settable on 0.111, get-only on 0.113 (`GameCompat.SetHoverTipId`).
 - `NHotkeyManager.Push/RemoveHotkeyReleasedBinding` — 0.113 added a trailing
-  `long sequence = 0` and made Remove return it (`GameCompat.*HotkeyReleasedBinding`).
+  `long sequence = 0` and made Remove return it; 0.114 added a `Node owner` after the
+  hotkey (`GameCompat.*HotkeyReleasedBinding`, which takes the owner and fills
+  arguments by type). On 0.114 a binding fires only while its owner is visible and not
+  behind an open screen, and Remove must be given the same owner as Push. The All
+  Cards shortcut is owned by the combat **%** button, so on 0.114 it does not fire
+  over the Draw or Discard pile screen; with **Override Draw Pile button** on, All
+  Cards lists the Draw Pile key among its own close keys for the same reason.
+- `AmnesiaPower` and `AeonglassDominionPower` exist only from 0.114. `NextHandDraw`
+  finds Aeonglass by class name, and `AmnesiaPredictionPatch` resolves its target by
+  name in `Prepare`/`TargetMethod`, so it is skipped on 0.111.
 - The `compressed` texture atlas became `compressed_atlas` in 0.113 (`GameArt`, which
   tries each path newest first).
 

@@ -45,6 +45,8 @@ internal static class DrawPileOverridePatch
             if (capstone?.CurrentCapstoneScreen is NCardPileScreen open)
             {
                 // Pressing it again closes, the way the pile buttons already behave.
+                // From 0.114 the key no longer reaches a button behind an open screen,
+                // so All Cards also lists it among its own close keys.
                 if (open.Name == AllCardsPileScreenCoordinator.ScreenName)
                     capstone.Close();
                 return false;

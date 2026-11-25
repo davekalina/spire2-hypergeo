@@ -47,9 +47,14 @@ internal sealed class AllCardsScreenView : IDisposable
         // Live only while combat has a UI, the same lifetime as the button itself.
         // The screen registers the same key as one of its close hotkeys, and the
         // hotkey manager runs the most recent binding, so it toggles.
+        //
+        // The button owns the binding. From 0.114 the game fires a binding only while
+        // its owner is visible and not behind an open screen, so the shortcut follows
+        // the button: it works whenever the combat UI is showing, and an open pile
+        // screen takes the key instead, as it does for the game's own pile buttons.
         if (NHotkeyManager.Instance is { } hotkeys)
             GameCompat.PushHotkeyReleasedBinding(
-                hotkeys, AllCardsHotkey.Action, OpenFromHotkey);
+                hotkeys, AllCardsHotkey.Action, _visualButton, OpenFromHotkey);
     }
 
     public void Dispose()
@@ -57,11 +62,18 @@ internal sealed class AllCardsScreenView : IDisposable
         _inputButton.Pressed -= Open;
         _inputButton.MouseEntered -= OnMouseEntered;
         _inputButton.MouseExited -= OnMouseExited;
-        if (NHotkeyManager.Instance is { } hotkeys)
-            GameCompat.RemoveHotkeyReleasedBinding(
-                hotkeys, AllCardsHotkey.Action, OpenFromHotkey);
-        if (GodotObject.IsInstanceValid(_visualButton))
-            _visualButton.QueueFree();
+        // A binding that cannot be removed must not keep the button on screen.
+        try
+        {
+            if (NHotkeyManager.Instance is { } hotkeys)
+                GameCompat.RemoveHotkeyReleasedBinding(
+                    hotkeys, AllCardsHotkey.Action, _visualButton, OpenFromHotkey);
+        }
+        finally
+        {
+            if (GodotObject.IsInstanceValid(_visualButton))
+                _visualButton.QueueFree();
+        }
     }
 
     private void Open()
@@ -75,6 +87,11 @@ internal sealed class AllCardsScreenView : IDisposable
     /// The button ignores clicks while combat is not accepting them; the shortcut has
     /// to check for itself. A screen that is asking the player for something is left
     /// alone — the pile screens are the only ones worth switching away from.
+    ///
+    /// From 0.114 the game makes these checks partly moot: no binding owned by the
+    /// combat UI fires while any screen is open over it, so the shortcut no longer
+    /// switches from the Draw or Discard pile screen to All Cards there, matching the
+    /// game's own pile buttons. The checks stay for 0.111, which has no such rule.
     /// </summary>
     private void OpenFromHotkey()
     {
